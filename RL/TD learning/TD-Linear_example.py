@@ -116,15 +116,16 @@ def plot_results(true_v, approx_v, errors):
 
 def main():
     env = GridWorld(gamma=0.9)
-    true_v = env.true_value()
+    true_v_vec = env.get_true_value_by_policy()
+    true_v = true_v_vec.reshape(env.rows, env.cols)
     features = build_features(env)
 
     theta, errors = td_linear_policy_evaluation(
         env=env,
         features=features,
-        true_v=true_v.reshape(-1),
+        true_v=true_v_vec,
         alpha=0.0005,
-        num_steps=30000,
+        num_steps=50000,
         seed=42,
     )
 

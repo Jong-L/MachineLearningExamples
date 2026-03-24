@@ -1,7 +1,8 @@
 """
-网格地图。默认5*5，策略为均匀分布，进入边界时状态不变，可以进入禁止区域
+网格地图。默认5*5，策略为均匀分布，进入边界时状态不变，可以进入禁止区域。
+这个模型包含策略，并自己根据策略计算状态值
 这是一个确定性模型,该模型以及在此基础上的强化学习算法都是按照确定性模型来写的
-在该模型中，状态值v是一个矩阵，shape为(rows,cols)
+在该模型中，状态值v是一个一维向量，shape为(n_states,1)
 """
 
 import numpy as np
@@ -21,7 +22,6 @@ class GridWorld:
         self.gamma = gamma
         self.actions = [(0, -1), (0, 1), (-1, 0), (1, 0), (0, 0)]#依次为左，右，上，下，不动
         self.n_actions = len(self.actions)
-        self.action_prob = 1.0 / len(self.actions)
 
         if policy is None:
             self.policy = np.ones((self.n_states, len(self.actions))) / len(self.actions)
@@ -81,7 +81,7 @@ class GridWorld:
 
         return next_state, 0.0
 
-    def sample_next(self, state, rng):#根据策略生成动作
+    def sample_next(self, state, rng):#根据策略生成动作并执行
         s_idx = self.state_to_index(state)
         action_probs = self.policy[s_idx]
         action_id = rng.choice(len(self.actions), p=action_probs)
@@ -100,11 +100,75 @@ class GridWorld:
                 r_pi[s] += self.policy[s, action_id] * reward
         return p_pi, r_pi
 
-    def true_value(self):
+    def true_value(self) -> np.ndarray:
         p_pi, r_pi = self.build_linear_system()
         a = np.eye(self.n_states) - self.gamma * p_pi
         v = np.linalg.solve(a, r_pi)
-        return v.reshape(self.rows, self.cols) #  将解得的扁平化状态价值向量重塑为原始网格形状
+        return v
+
+    def get_true_value_by_policy(self, policy: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        通过求解线性方程组计算状态值
+        
+        policy: 可选的策略矩阵，shape为(n_states, n_actions)。如果不提供，使用self.policy
+        """
+        if policy is not None:
+            # 临时使用传入的策略
+            original_policy = self.policy
+            self.policy = policy
+            p_pi, r_pi = self.build_linear_system()
+            self.policy = original_policy
+        else:
+            p_pi, r_pi = self.build_linear_system()
+        
+        a = np.eye(self.n_states) - self.gamma * p_pi
+        v = np.linalg.solve(a, r_pi)
+        return v
+
+    def get_itrated_value_by_policy(
+        self, 
+        policy: Optional[np.ndarray] = None,
+        threshold: float = 1e-6,
+        max_iterations: int = 1000
+    ) -> np.ndarray:
+        """
+        通过迭代法求解贝尔曼方程计算状态值
+        
+        policy: 可选的策略矩阵，shape为(n_states, n_actions)。如果不提供，使用self.policy
+        threshold: 收敛阈值，当最大变化量小于该值时停止迭代
+        max_iterations: 最大迭代次数
+        
+        返回：状态值向量 v, shape为(n_states,)
+        """
+        if policy is not None:
+            # 临时使用传入的策略
+            original_policy = self.policy
+            self.policy = policy
+            p_pi, r_pi = self.build_linear_system()
+            self.policy = original_policy
+        else:
+            p_pi, r_pi = self.build_linear_system()
+        
+        # 初始化状态值为 0
+        v = np.zeros(self.n_states)
+        
+        for iteration in range(max_iterations):
+            # 贝尔曼备份：v = r + gamma * P * v
+            v_new = r_pi + self.gamma * p_pi @ v
+            
+            # 检查是否收敛
+            delta = np.max(np.abs(v_new - v))
+            if delta < threshold:
+                break
+            
+            v = v_new
+        
+        return v
+
+    def value_vector_to_matrix(self, v: np.ndarray) -> np.ndarray:
+        if v.shape != (self.n_states,):
+            raise ValueError(f"`v` 的形状应为 {(self.n_states,)}，实际为 {v.shape}")
+        return v.reshape(self.rows, self.cols)
 
     def render(self,ax:Optional[plt.Axes]=None):#绘制网格地图
         """
@@ -169,15 +233,13 @@ class GridWorld:
         cmap: str = "coolwarm",
         ax:Optional[plt.Axes] = None,
     ):#绘制状态值数值图
-
         if v is None:
-            v_mat = self.true_value()
+            v_mat = self.value_vector_to_matrix(self.get_true_value_by_policy())
         else:
-            v_arr = np.asarray(v, dtype=float)
-            if v_arr.shape == (self.n_states,):
-                v_mat = v_arr.reshape(self.rows, self.cols)
-            elif v_arr.shape == (self.rows, self.cols):
-                v_mat = v_arr
+            if v.shape == (self.n_states,):
+                v_mat = self.value_vector_to_matrix(v)
+            elif v.shape == (self.rows, self.cols):
+                v_mat = v
             else:
                 raise ValueError(
                     f"`v` 的形状应为 {(self.n_states,)} 或 {(self.rows, self.cols)}，实际为 {v_arr.shape}"
@@ -270,7 +332,6 @@ class GridWorld:
         ax.set_yticklabels(list(range(self.rows)))
         ax.grid(False)
 
-        # 使用环境中定义的动作顺序，避免绘图方向与转移模型不一致
         # self.actions 内部表示为 (dr, dc): 行增量、列增量
 
         for r in range(self.rows):
@@ -285,7 +346,6 @@ class GridWorld:
                     facecolor = "lightgray"
                 else:
                     facecolor = "white"
-                    label = ""
                     
                 rect = patches.Rectangle(
                     (c, r), 1, 1,
@@ -294,14 +354,6 @@ class GridWorld:
                     linewidth=1.2,
                 )
                 ax.add_patch(rect)
-                
-                if label:
-                    ax.text(
-                        c + 0.5, r + 0.5, label,
-                        ha="center", va="center",
-                        fontsize=14, fontweight="bold",
-                        color="black",
-                    )
                 
                 # 为每个动作绘制箭头
                 for action_id, (dr, dc) in enumerate(self.actions):
@@ -340,3 +392,32 @@ class GridWorld:
 if __name__ == "__main__":
     env = GridWorld()
     env.render_with_policy()
+    
+    # 测试两种方法计算状态值
+    print("Testing get_true_value_by_policy (linear system solution)...")
+    v_linear = env.get_true_value_by_policy()
+    print(f"Linear method result shape: {v_linear.shape}")
+    print(f"Linear method max value: {np.max(v_linear):.4f}")
+    print(f"Linear method min value: {np.min(v_linear):.4f}")
+    
+    print("\nTesting get_itrated_value_by_policy (iterative method)...")
+    v_iterative = env.get_itrated_value_by_policy()
+    print(f"Iterative method result shape: {v_iterative.shape}")
+    print(f"Iterative method max value: {np.max(v_iterative):.4f}")
+    print(f"Iterative method min value: {np.min(v_iterative):.4f}")
+    
+    print(f"\nDifference between two methods (max abs diff): {np.max(np.abs(v_linear - v_iterative)):.2e}")
+    print("Both methods should produce very similar results!")
+    
+    # 测试传入不同策略的情况
+    print("\n\nTesting with random policy...")
+    policy_random = np.random.rand(25, 5)
+    policy_random = policy_random / policy_random.sum(axis=1, keepdims=True)
+    env_random = GridWorld(policy=policy_random)
+    
+    v_random_linear = env_random.get_true_value_by_policy()
+    v_random_iterative = env_random.get_itrated_value_by_policy()
+    
+    print(f"Random policy - Linear method max value: {np.max(v_random_linear):.4f}")
+    print(f"Random policy - Iterative method max value: {np.max(v_random_iterative):.4f}")
+    print(f"Random policy - Difference: {np.max(np.abs(v_random_linear - v_random_iterative)):.2e}")

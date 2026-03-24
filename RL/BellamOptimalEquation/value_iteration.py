@@ -3,60 +3,84 @@ import matplotlib.pyplot as plt
 
 import sys
 import os
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
 
-class ValueIteration:
-    @staticmethod
-    def q_value(env: GridWorld,V:np.ndarray, s: int, a: Tuple[int,int]) -> float:
-        state= env.index_to_state(s)
-        next_state, reward = env.step(state, a)
-        next_state_idx=env.state_to_index(next_state)
-        q= reward + env.gamma * V[next_state_idx]
-        return q
+@dataclass
+class ValueIterationConfig:
+    threshold: float = 1e-6
+    max_iter: int = 1000
+    verbose: bool = True#是否打印迭代信息
 
-    @staticmethod
-    def iterate( env: GridWorld, threshold: float = 1e-6,max_iter: int = 1000) ->Tuple[np.ndarray, np.ndarray]:
-        V= np.zeros(env.n_states)
-        for count in range(max_iter):
-            new_V= np.zeros(env.n_states)
-            best_actions = np.zeros(env.n_states, dtype=int) 
-            for s in range(env.n_states):
-                max_q= -np.inf
-                max_a_idx=0
-                for a_idx,a in enumerate(env.actions):
-                    q=ValueIteration.q_value(env, V,s, a)
-                    if q>max_q:
-                        max_q= q
-                        max_a_idx= a_idx
-                new_V[s]= max_q
-                best_actions[s]= max_a_idx
 
-            delta=np.max(np.abs(V - new_V))
-            V=new_V
-            if delta < threshold:
-                print(f"Converged at iteration {count + 1}")
-                break
-        if count == max_iter - 1:
-            print("Reached maximum iterations without converging.")
-        policy= ValueIteration.extract_policy(env, best_actions)
-        return V,policy
-    
-    @staticmethod
-    def extract_policy(env: GridWorld, best_actions: np.ndarray) -> np.ndarray:
-        policy = np.zeros((env.n_states, env.n_actions))
-        for s in range(env.n_states):
-            policy[s] = np.eye(env.n_actions)[best_actions[s]]
-        return policy
+@dataclass
+class ValueIterationResult:
+    value: np.ndarray
+    policy: np.ndarray
+    iterations: int
+    delta: float
+    converged: bool
+
+
+def q_value(env: GridWorld, v: np.ndarray, state_idx: int, action: Tuple[int, int]):
+    state = env.index_to_state(state_idx)
+    next_state, reward = env.step(state, action)
+    next_state_idx = env.state_to_index(next_state)
+    return reward + env.gamma * v[next_state_idx]
+
+
+def extract_policy(env: GridWorld, best_actions: np.ndarray) -> np.ndarray:
+    policy = np.zeros((env.n_states, env.n_actions), dtype=float)
+    policy[np.arange(env.n_states), best_actions] = 1.0
+    return policy
+
+
+def run_value_iteration(env: GridWorld, config: Optional[ValueIterationConfig] = None) -> ValueIterationResult:
+    cfg = config or ValueIterationConfig()
+    v = np.zeros(env.n_states, dtype=float)
+    best_actions = np.zeros(env.n_states, dtype=int)
+    delta = np.inf
+    converged = False
+    iterations = 0
+
+    for count in range(cfg.max_iter):
+        new_v = np.zeros(env.n_states, dtype=float)
+        best_actions.fill(0)
+
+        for s_idx in range(env.n_states):
+            q_vals = np.array([q_value(env, v, s_idx, action) for action in env.actions], dtype=float)#所有动作的q值
+            best_actions[s_idx] = int(np.argmax(q_vals))
+            new_v[s_idx] = float(np.max(q_vals))
+
+        delta = float(np.max(np.abs(v - new_v)))
+        v = new_v
+        iterations = count + 1
+        if delta < cfg.threshold:
+            converged = True
+            break
+
+    if cfg.verbose:
+        if converged:
+            print(f"Converged at iteration {iterations}, delta={delta:.3e}")
+        else:
+            print(f"Reached maximum iterations ({cfg.max_iter}), last delta={delta:.3e}")
+
+    return ValueIterationResult(
+        value=v,
+        policy=extract_policy(env, best_actions),
+        iterations=iterations,
+        delta=delta,
+        converged=converged,
+    )
 
 if __name__ == "__main__":
     env = GridWorld()
-    V, policy = ValueIteration.iterate(env)
-    #policy[0]=np.array([0,0,0,0,0])
-    env= GridWorld(policy=policy)
+    result = run_value_iteration(env, ValueIterationConfig(threshold=1e-6, max_iter=1000, verbose=True))
+    env = GridWorld(policy=result.policy)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    env.render_with_state_value(title="true state value with policy", ax=ax1)
+    env.render_with_state_value(result.value, title="Value Iteration V*(s)", ax=ax1)
     env.render_with_policy(ax=ax2)
     plt.show()

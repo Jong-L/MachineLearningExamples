@@ -8,7 +8,7 @@ from grid_world import GridWorld
 
 
 def policy_evaluation(env:GridWorld, gamma: float = 0.9) -> np.ndarray:
-    v=env.true_value()
+    v=env.get_true_value_by_policy()
     # 创建包含两个子图的画布，1行2列
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     
