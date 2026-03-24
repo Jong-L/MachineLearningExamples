@@ -1,6 +1,5 @@
 """
-网格地图。默认5*5，策略为均匀分布，进入边界时状态不变，可以进入禁止区域。
-这个模型包含策略，并自己根据策略计算状态值
+网格地图，是环境+策略的混合物。默认5*5，策略为均匀分布，进入边界时状态不变，可以进入禁止区域。
 这是一个确定性模型,该模型以及在此基础上的强化学习算法都是按照确定性模型来写的
 在该模型中，状态值v是一个一维向量，shape为(n_states,1)
 """
@@ -81,9 +80,11 @@ class GridWorld:
 
         return next_state, 0.0
 
-    def sample_next(self, state, rng):#根据策略生成动作并执行
+    def sample_next(self, state:Tuple[int,int], policy, rng: np.random.RandomState):#根据策略生成动作并执行
         s_idx = self.state_to_index(state)
-        action_probs = self.policy[s_idx]
+        if policy is None:
+            policy = self.policy
+        action_probs = policy[s_idx]
         action_id = rng.choice(len(self.actions), p=action_probs)
         return self.step(state, self.actions[action_id])
 
@@ -242,7 +243,7 @@ class GridWorld:
                 v_mat = v
             else:
                 raise ValueError(
-                    f"`v` 的形状应为 {(self.n_states,)} 或 {(self.rows, self.cols)}，实际为 {v_arr.shape}"
+                    f"`v` 的形状应为 {(self.n_states,)} 或 {(self.rows, self.cols)}，实际为 {v.shape}"
                 )
 
         if ax is None:

@@ -1,3 +1,7 @@
+"""
+其实贝尔曼公式相关内容更多在grid_world.py中，这里只是简单地展示了不同策略下状态值是多少
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import os
