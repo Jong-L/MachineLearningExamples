@@ -1,22 +1,14 @@
 """
-Monte Carlo Exploring Starts (MCES) with first visit
-相比于MCBasic，MCES在一个episode中同时计算多个q值，而不是一个episode只计算一个q值，
-这样能够用更少的episode估计到q值，提高了样本利用率。
-将起点选择改为随机，更均匀地访问每个状态，相比于依序遍历每个起点，
-能在更少的迭代情况下访问到所有状态，能够降低计算成本。
-
-这里的策略是确定性的，所以可能会出现某些状态一直没被访问，导致效果不好，
-在下一节中会引入soft policy来改进
+MC epsilon learning with first visit
+相比于MC Exploring Starts 只需要修改策略更新部分即可
 """
-
-from pstats import StatsProfile
 import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
 import os
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import Tuple, List
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
@@ -26,6 +18,7 @@ class MCESConfig:
     threshold: float = 1e-6
     max_iter: int = 1000
     episode_length: int = 150
+    epsilon: float = 0.1
     verbose: bool = True#是否打印迭代信息
 
 @dataclass
@@ -79,7 +72,10 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
         q_value=Returns / (i + 1)
         #policy improvement
         best_action_idx = np.argmax(q_value, axis=1)
-        policy=np.array([np.eye(env.n_actions)[best_action_idx[s_idx]] for s_idx in range(env.n_states)])
+        #policy=np.array([np.eye(env.n_actions)[best_action_idx[s_idx]] for s_idx in range(env.n_states)]) 
+        policy = np.full((env.n_states, env.n_actions), config.epsilon / env.n_actions)
+        # 更新最优动作的概率
+        policy[np.arange(env.n_states), best_action_idx] = 1 - (env.n_actions - 1) * config.epsilon / env.n_actions
         
         new_v=env.get_true_value_by_policy(policy)
         delta = np.max(np.abs(new_v - v))

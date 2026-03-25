@@ -46,7 +46,7 @@ def policy_iteration(env: GridWorld, cfg: PolicyIterationConfig):
 
         #policy improvement
         for s_idx in range(env.n_states):
-            q_vals = np.array([q_value(env, v, s_idx, action) for action in env.actions], dtype=float)#所有动作的q值
+            q_vals = np.array([q_value(env, new_v, s_idx, action) for action in env.actions], dtype=float)#所有动作的q值
             best_a = int(np.argmax(q_vals))
             policy[s_idx] = np.eye(env.n_actions)[best_a]
         
