@@ -26,6 +26,7 @@ class MCESConfig:
     threshold: float = 1e-6
     max_iter: int = 1000
     episode_length: int = 150
+    seed: int = 42
     verbose: bool = True#是否打印迭代信息
 
 @dataclass
@@ -43,18 +44,15 @@ def sample_randomly(env: GridWorld) -> Tuple[Tuple[int, int], Tuple[int, int]]:
     return state, action
 
 # 生成episode
-def episode_generate(env: GridWorld, state: Tuple[int, int], action: Tuple[int, int],policy: np.ndarray,episode_length: int) -> List:
+def episode_generate(env: GridWorld, state: Tuple[int, int], action: Tuple[int, int],policy: np.ndarray,episode_length: int,seed:int) -> List:
     episode = []
-    rng=np.random.default_rng()#测试发现42是效果比较差的，需要比较大的episode_length 结果才比较好，比如150
+    #rng=np.random.default_rng(seed)
+    rng=np.random.default_rng()
     next_state, reward = env.step(state, action)
     episode.append((state, action, reward))
     state=next_state
     for _ in range(episode_length):
-        s_idx=env.state_to_index(state)
-        action_probs=policy[s_idx]
-        action_idx = rng.choice(env.n_actions, p=action_probs)
-        action = env.actions[action_idx]
-        next_state, reward = env.step(state, action)
+        next_state,action,reward=env.sample_next(state,policy,rng)
         episode.append((state, action, reward))
         state = next_state
     
@@ -69,7 +67,7 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
     for i in range(config.max_iter):#for each episode
         q_episode=np.zeros((env.n_states, env.n_actions))
         state, action = sample_randomly(env)
-        episode = episode_generate(env, state, action, policy, config.episode_length)
+        episode = episode_generate(env, state, action, policy, config.episode_length, config.seed)
         g=0
         for state, action, reward in reversed(episode):
             g=reward+env.gamma*g

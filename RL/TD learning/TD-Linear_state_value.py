@@ -1,4 +1,5 @@
 '''
+策略为环境本身的随机策略
 用参数$\theta$的线性函数近似状态值
 特征向量为$\phi(s)=\phi(x,y)=[1, x, y, x \cdot y, x^2, y^2]^T$，其中$x$和$y$分别表示状态$s$的行和列坐标。
 1. 初始化参数向量 $\theta$ 为零向量
@@ -24,9 +25,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
+from dataclasses import dataclass
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
+
+@dataclass
+class TDLinearStateValueConfig:
+    alpha: float = 0.0005
+    max_iteration: int = 30000
+    seed: int = 0
+
+@dataclass
+class TDLinearStateValueResult:
+    theta: np.ndarray
+    errors: np.ndarray
+    approx_v : np.ndarray
+
 
 def build_features(env):
     features = np.zeros((env.n_states, 6))# 特征向量
@@ -50,31 +65,23 @@ def td_linear_policy_evaluation(
     env,
     features,
     true_v,
-    alpha=0.0005,
-    num_steps=30000,
-    seed=0,
+    cfg: TDLinearStateValueConfig,
 ):
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(cfg.seed)
     theta = np.zeros(features.shape[1]) #  初始参数
     errors = [] #  用于存储每一步的误差值
 
-    valid_starts = [
-        env.state_to_index((r, c))
-        for r in range(env.rows)
-        for c in range(env.cols)
-    ]
-
-    state_idx = rng.choice(valid_starts) #  随机选择一个起始状态
+    state_idx = rng.choice(env.n_states) #  随机选择一个起始状态
     
-    for _ in range(num_steps):
+    for _ in range(cfg.max_iteration):
         state = env.index_to_state(state_idx)
-        next_state, reward = env.sample_next(state, rng)
+        next_state, action,reward = env.sample_next(state,None, rng)
         next_idx = env.state_to_index(next_state)
 
         v_s = features[state_idx] @ theta
         v_next = features[next_idx] @ theta
         delta = reward + env.gamma * v_next - v_s
-        theta += alpha * delta * features[state_idx]
+        theta += cfg.alpha * delta * features[state_idx]
 
         approx_v = features @ theta
         rmse = np.sqrt(np.mean((approx_v - true_v) ** 2))
@@ -82,7 +89,11 @@ def td_linear_policy_evaluation(
 
         state_idx = next_idx
 
-    return theta, np.array(errors)
+    return TDLinearStateValueResult(
+        theta=theta,
+        errors=np.array(errors),
+        approx_v=approx_v,
+    )
 
 def plot_results(true_v, approx_v, errors):
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.5))
@@ -120,16 +131,20 @@ def main():
     true_v = true_v_vec.reshape(env.rows, env.cols)
     features = build_features(env)
 
-    theta, errors = td_linear_policy_evaluation(
+    cfg = TDLinearStateValueConfig(
+        alpha=0.0005,
+        max_iteration=40000,
+        seed=42,
+    )
+    result = td_linear_policy_evaluation(
         env=env,
         features=features,
         true_v=true_v_vec,
-        alpha=0.0005,
-        num_steps=50000,
-        seed=42,
+        cfg=cfg,
     )
-
-    approx_v = (features @ theta).reshape(env.rows, env.cols)
+    theta = result.theta
+    errors = result.errors
+    approx_v = result.approx_v.reshape(env.rows, env.cols)
 
     np.set_printoptions(precision=3, suppress=True)
     print("Theoretical state value V_pi:")

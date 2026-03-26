@@ -1,6 +1,8 @@
 """
 MC epsilon learning with first visit
 相比于MC Exploring Starts 只需要修改策略更新部分即可
+将最终的epsilon greedy策略将其转化为确定性策略，并重新绘制结果,
+可以看出相比于单纯地MCES效果更好,十分接近值迭代或策略迭代的结果
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,6 +21,7 @@ class MCESConfig:
     max_iter: int = 1000
     episode_length: int = 150
     epsilon: float = 0.1
+    seed:int=42
     verbose: bool = True#是否打印迭代信息
 
 @dataclass
@@ -36,18 +39,15 @@ def sample_randomly(env: GridWorld) -> Tuple[Tuple[int, int], Tuple[int, int]]:
     return state, action
 
 # 生成episode
-def episode_generate(env: GridWorld, state: Tuple[int, int], action: Tuple[int, int],policy: np.ndarray,episode_length: int) -> List:
+def episode_generate(env: GridWorld, state: Tuple[int, int], action: Tuple[int, int],policy: np.ndarray,episode_length: int,seed:int) -> List:
     episode = []
-    rng=np.random.default_rng()#测试发现42是效果比较差的，需要比较大的episode_length 结果才比较好，比如150
+    #rng=np.random.default_rng(seed)
+    rng=np.random.default_rng()
     next_state, reward = env.step(state, action)
     episode.append((state, action, reward))
     state=next_state
     for _ in range(episode_length):
-        s_idx=env.state_to_index(state)
-        action_probs=policy[s_idx]
-        action_idx = rng.choice(env.n_actions, p=action_probs)
-        action = env.actions[action_idx]
-        next_state, reward = env.step(state, action)
+        next_state,action,reward=env.sample_next(state,policy,rng)
         episode.append((state, action, reward))
         state = next_state
     
@@ -62,7 +62,7 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
     for i in range(config.max_iter):#for each episode
         q_episode=np.zeros((env.n_states, env.n_actions))
         state, action = sample_randomly(env)
-        episode = episode_generate(env, state, action, policy, config.episode_length)
+        episode = episode_generate(env, state, action, policy, config.episode_length, config.seed)
         g=0
         for state, action, reward in reversed(episode):
             g=reward+env.gamma*g
@@ -90,7 +90,7 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
         if converged:
             print(f"MCES converged at iteration {i + 1} with delta {delta}")
         else:
-            print(f"Reached maximum iterations ({cfg.max_iter}), last delta={delta:.3e}")
+            print(f"Reached maximum iterations ({config.max_iter}), last delta={delta:.3e}")
 
     state_value=env.get_true_value_by_policy(policy)
     return MCESResult(
@@ -110,3 +110,13 @@ if __name__ == "__main__":
     env.render_with_state_value(result.value, title="MCES Value ", ax=ax1)
     env.render_with_policy(ax=ax2)
     plt.show()
+    #将soft policy 转为hard policy，重新计算状态值
+    best_action_idx=np.argmax(result.policy,axis=1)
+    policy=np.array([np.eye(env.n_actions)[best_action_idx[s_idx]] for s_idx in range(env.n_states)])
+    env=GridWorld(policy=policy)
+    state_value=env.get_true_value_by_policy(policy)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    env.render_with_state_value(state_value, title="MCES Value ", ax=ax1)
+    env.render_with_policy(ax=ax2)
+    plt.show()
+

@@ -18,7 +18,8 @@ class PolicyIterationConfig:
     threshold: float = 1e-6
     max_iter: int = 1000#策略迭代数
     episode_length: int = 25#估计q值的episode长度
-    episodes: int = 10#估计q值的episode数
+    n_episodes: int = 10#估计q值的episode数
+    seed:int=42
     verbose: bool = True#是否打印迭代信息
 
 @dataclass
@@ -31,8 +32,8 @@ class PolicyIterationResult:
 
 def monte_carlo_q_value(env: GridWorld, state_idx: int, action: 
                         Tuple[int, int],policy: np.ndarray,
-                        episodes:int,episode_length: int):
-    rng=np.random.RandomState(42)#固定随机种子
+                        episodes:int,episode_length: int,seed:int):
+    rng=np.random.RandomState(seed)#固定随机种子
     gamma=env.gamma
     #gamma=1
     start_state=env.index_to_state(state_idx)
@@ -41,7 +42,7 @@ def monte_carlo_q_value(env: GridWorld, state_idx: int, action:
         state,reward=env.step(start_state,action)
         q[i]+=reward
         for t in range(episode_length):
-            next_state, reward = env.sample_next(state,policy, rng)
+            next_state,action, reward = env.sample_next(state,policy, rng)
             q[i]+=reward*(gamma**t)
             state=next_state
     q_value=np.mean(q)
@@ -60,7 +61,7 @@ def policy_iteration(env: GridWorld, cfg: PolicyIterationConfig):
 
         #policy improvement
         for s_idx in range(env.n_states):
-            q_vals = np.array([monte_carlo_q_value(env, s_idx, action,policy,cfg.episodes,cfg.episode_length) 
+            q_vals = np.array([monte_carlo_q_value(env, s_idx, action,policy,cfg.n_episodes,cfg.episode_length,cfg.seed) 
                                for action in env.actions])#所有动作的q值
             best_a = np.argmax(q_vals)
             

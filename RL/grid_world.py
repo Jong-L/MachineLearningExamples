@@ -86,7 +86,9 @@ class GridWorld:
             policy = self.policy
         action_probs = policy[s_idx]
         action_id = rng.choice(len(self.actions), p=action_probs)
-        return self.step(state, self.actions[action_id])
+        action = self.actions[action_id]
+        next_state, reward = self.step(state, action)
+        return (next_state,action, reward)
 
     def build_linear_system(self):#模型，p(s_j|s_i)=p[i,j]，r_i=r[i]
         p_pi = np.zeros((self.n_states, self.n_states))

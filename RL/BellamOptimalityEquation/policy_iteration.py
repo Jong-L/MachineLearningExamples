@@ -76,6 +76,6 @@ if __name__ == "__main__":
     result=policy_iteration(env, PolicyIterationConfig())
     env = GridWorld(policy=result.policy)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    env.render_with_state_value(result.value, title="Value Iteration V*(s)", ax=ax1)
+    env.render_with_state_value(result.value, title="Policy Iteration V*(s)", ax=ax1)
     env.render_with_policy(ax=ax2)
     plt.show()
