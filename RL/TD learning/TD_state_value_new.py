@@ -14,10 +14,11 @@ $w$就是对$v_\pi(S)$的估计，将$w_{k}$作为$v_{k}(S)$
 
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 import sys
 import os
 from typing import List, Tuple
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
@@ -82,8 +83,10 @@ def plot_results(env: GridWorld, true_v: np.ndarray, approx_v: np.ndarray, error
 
 if __name__ == "__main__":
     env=GridWorld()
-    config=TDConfig()
-    result=td_state_value(env,config)
+    cfg=TDConfig()
+    start_time = time.perf_counter()
+    result=td_state_value(env,cfg)
+    elapsed_time = time.perf_counter() - start_time
 
     # 打印结果
     print("Ground Truth State Value:")
@@ -91,6 +94,12 @@ if __name__ == "__main__":
     print("\nEstimated State Value:")
     print(env.value_vector_to_matrix(result.v))
     print(f"\nFinal RMSE: {result.erros[-1]:.6f}")
+
+    print("\n=== 运行配置与耗时 ===")
+    print("算法: TD(0) State Value (incremental)")
+    print(f"配置参数: {asdict(cfg)}")
+    print(f"迭代信息: iterations={len(result.erros)}, final_rmse={result.erros[-1]:.6f}")
+    print(f"算法运行时间: {elapsed_time:.6f} 秒")
 
     # 绘制结果
     plot_results(env, result.true_v, result.v, result.erros)

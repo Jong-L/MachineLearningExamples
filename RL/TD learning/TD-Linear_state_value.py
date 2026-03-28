@@ -23,9 +23,10 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 import sys
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
@@ -136,12 +137,14 @@ def main():
         max_iteration=40000,
         seed=42,
     )
+    start_time = time.perf_counter()
     result = td_linear_policy_evaluation(
         env=env,
         features=features,
         true_v=true_v_vec,
         cfg=cfg,
     )
+    elapsed_time = time.perf_counter() - start_time
     theta = result.theta
     errors = result.errors
     approx_v = result.approx_v.reshape(env.rows, env.cols)
@@ -152,6 +155,12 @@ def main():
     print("\nLearned parameter theta:")
     print(theta)
     print(f"\nFinal RMSE: {errors[-1]:.6f}")
+
+    print("\n=== 运行配置与耗时 ===")
+    print("算法: TD(0) Linear Function Approximation")
+    print(f"配置参数: {asdict(cfg)}")
+    print(f"迭代信息: iterations={len(errors)}, final_rmse={errors[-1]:.6f}")
+    print(f"算法运行时间: {elapsed_time:.6f} 秒")
 
     plot_results(true_v, approx_v, errors)
 

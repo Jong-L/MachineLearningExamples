@@ -1,5 +1,5 @@
 """
-网格地图，是环境+策略的混合物。默认5*5，策略为均匀分布，进入边界时状态不变，可以进入禁止区域。
+网格地图，是环境+策略的混合物。默认5*5，策略为均匀分布，进入边界时状态不变，可以进入禁止区域，进入目标状态后不
 这是一个确定性模型,该模型以及在此基础上的强化学习算法都是按照确定性模型来写的
 在该模型中，状态值v是一个一维向量，shape为(n_states,1)
 """
@@ -7,7 +7,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import Tuple
+from typing import Set, Tuple
 from typing import Optional
 
 class GridWorld:
@@ -34,7 +34,7 @@ class GridWorld:
     def set_target(self, target_pos:Tuple[int,int]=(3, 2))-> None:
         self.target = target_pos
 
-    def set_forbidden(self, forbidden_pos=None):
+    def set_forbidden(self, forbidden_pos: Set[Tuple[int, int]] = None)-> Set[Tuple[int, int]]:
         if forbidden_pos is None:
             forbidden_pos = {
                 (1, 1), (1, 2),

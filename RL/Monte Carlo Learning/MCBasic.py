@@ -3,24 +3,28 @@
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 import sys
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Tuple
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
-
+from optimal_solution_manager import (
+    generate_env_id,
+    load_optimal_solution,
+    has_optimal_solution
+)
 
 @dataclass
 class PolicyIterationConfig:
     threshold: float = 1e-6
-    max_iter: int = 1000#策略迭代数
-    episode_length: int = 25#估计q值的episode长度
-    n_episodes: int = 10#估计q值的episode数
+    max_iter: int = 500#策略迭代数
+    episode_length: int = 15#估计q值的episode长度
+    n_episodes: int = 5#估计q值的episode数
     seed:int=42
-    verbose: bool = True#是否打印迭代信息
 
 @dataclass
 class PolicyIterationResult:
@@ -43,7 +47,7 @@ def monte_carlo_q_value(env: GridWorld, state_idx: int, action:
         q[i]+=reward
         for t in range(episode_length):
             next_state,action, reward = env.sample_next(state,policy, rng)
-            q[i]+=reward*(gamma**t)
+            q[i]+=reward*(gamma**(t+1))
             state=next_state
     q_value=np.mean(q)
     return q_value
@@ -68,17 +72,11 @@ def policy_iteration(env: GridWorld, cfg: PolicyIterationConfig):
             policy[s_idx] = np.eye(env.n_actions)[best_a]
         
         delta = np.max(np.abs(v - new_v))
-        v = new_v
+        v = np.copy(new_v)
         iterations = count + 1
         if delta < cfg.threshold:
             converged = True
             break
-            
-    if cfg.verbose:
-        if converged:
-            print(f"Converged at iteration {iterations}, delta={delta:.3e}")
-        else:
-            print(f"Reached maximum iterations ({cfg.max_iter}), last delta={delta:.3e}")
 
     return PolicyIterationResult(
         value=v,
@@ -90,9 +88,30 @@ def policy_iteration(env: GridWorld, cfg: PolicyIterationConfig):
 
 if __name__ == "__main__":
     env = GridWorld()
-    result=policy_iteration(env, PolicyIterationConfig())
+    cfg = PolicyIterationConfig()
+    start_time = time.perf_counter()
+    result=policy_iteration(env, cfg)
+
+    elapsed_time = time.perf_counter() - start_time
+
     env = GridWorld(policy=result.policy)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     env.render_with_state_value(result.value, title="MC Value ", ax=ax1)
     env.render_with_policy(ax=ax2)
     plt.show()
+    
+    print("\n=== 运行配置与耗时 ===")
+    print("算法: MC-based Policy Iteration (MCBasic)")
+    print(f"配置参数: {asdict(cfg)}")
+    print(f"迭代信息: iterations={result.iterations}, converged={result.converged}, delta={result.delta:.3e}")
+    print(f"算法运行时间: {elapsed_time:.6f} 秒")
+    env_id=generate_env_id(env)
+    if has_optimal_solution(env_id):
+        optimal_solution = load_optimal_solution(env_id)
+        true_state_value = optimal_solution.value
+        result_value_sum = np.sum(result.value)
+        true_value_sum = np.sum(true_state_value)
+        error = np.mean(np.abs(true_state_value - result.value))
+        
+        print(f"总状态值: {result_value_sum:.5f}, 最优总状态值: {true_value_sum:.5f}")
+        print(f"mean abs error: {error:.5f}")

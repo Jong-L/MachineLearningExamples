@@ -1,13 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 import sys
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Optional, Tuple
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
+from optimal_solution_manager import (
+    generate_env_id,
+    save_optimal_solution,
+    OptimalSolution
+)
 
 @dataclass
 class ValueIterationConfig:
@@ -62,12 +69,6 @@ def run_value_iteration(env: GridWorld, config: Optional[ValueIterationConfig] =
             converged = True
             break
 
-    if cfg.verbose:
-        if converged:
-            print(f"Converged at iteration {iterations}, delta={delta:.3e}")
-        else:
-            print(f"Reached maximum iterations ({cfg.max_iter}), last delta={delta:.3e}")
-
     return ValueIterationResult(
         value=v,
         policy=extract_policy(env, best_actions),
@@ -78,7 +79,17 @@ def run_value_iteration(env: GridWorld, config: Optional[ValueIterationConfig] =
 
 if __name__ == "__main__":
     env = GridWorld()
-    result = run_value_iteration(env, ValueIterationConfig(threshold=1e-6, max_iter=1000, verbose=True))
+    cfg = ValueIterationConfig(threshold=1e-6, max_iter=1000, verbose=True)
+    start_time = time.perf_counter()
+    result = run_value_iteration(env, cfg)
+    
+    elapsed_time = time.perf_counter() - start_time
+    print("\n=== 运行配置与耗时 ===")
+    print("算法: Value Iteration")
+    print(f"配置参数: {asdict(cfg)}")
+    print(f"迭代信息: iterations={result.iterations}, converged={result.converged}, delta={result.delta:.3e}")
+    print(f"算法运行时间: {elapsed_time:.6f} 秒")
+
     env = GridWorld(policy=result.policy)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     env.render_with_state_value(result.value, title="Value Iteration V*(s)", ax=ax1)
