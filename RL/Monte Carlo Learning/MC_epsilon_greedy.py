@@ -63,6 +63,8 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
     policy=np.ones((env.n_states, env.n_actions))/env.n_actions#初始化策略
     v=env.get_true_value_by_policy(policy)
     converged = False
+    iterations = 0
+
     for i in range(config.max_iter):#for each episode
         q_episode=np.zeros((env.n_states, env.n_actions))
         state, action = sample_randomly(env)
@@ -82,6 +84,8 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
         
         new_v=env.get_true_value_by_policy(policy)
         delta = np.max(np.abs(new_v - v))
+
+        iterations += 1
         if delta < config.threshold:
             converged = True
             #break  # MCES 每个 episode 只访问部分状态，很多 Q 值未被更新
@@ -93,7 +97,7 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
     return MCESResult(
         value=state_value,
         policy=policy,
-        iterations=i + 1,
+        iterations=iterations,
         delta=delta,
         converged=converged,
     )

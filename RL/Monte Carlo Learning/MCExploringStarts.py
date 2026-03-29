@@ -88,6 +88,7 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
         
         new_v=env.get_true_value_by_policy(policy)
         delta = np.max(np.abs(new_v - v))
+        iterations = i + 1
         if delta < config.threshold:
             converged = True
             #break  # MCES 每个 episode 只访问部分状态，很多 Q 值未被更新
@@ -97,15 +98,15 @@ def mc_exploring_starts(env: GridWorld, config: MCESConfig):
 
     if config.verbose:
         if converged:
-            print(f"MCES converged at iteration {i + 1} with delta {delta}")
+            print(f"MCES converged at iteration {iterations} with delta {delta}")
         else:
-            print(f"Reached maximum iterations ({cfg.max_iter}), last delta={delta:.3e}")
+            print(f"Reached maximum iterations ({config.max_iter}), last delta={delta:.3e}")
 
     state_value=env.get_true_value_by_policy(policy)
     return MCESResult(
         value=state_value,
         policy=policy,
-        iterations=i + 1,
+        iterations=iterations,
         delta=delta,
         converged=converged,
     )

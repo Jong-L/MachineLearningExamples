@@ -72,18 +72,17 @@ def sarsa(env: GridWorld, config: SARSAConfig) -> SARSAResult:
         
         delta=np.max(np.abs(q_table-last_q_table))
 
+        iterations+=1
         if delta<config.threshold:
             no_improvement_count+=1
             if no_improvement_count>=config.patience:
                 converged=True
-                iterations=count
                 #break
                 #增量学习更新量小，不设跳出。
         else:
             no_improvement_count=0
 
         last_q_table=np.copy(q_table)
-        iterations=count
 
     return SARSAResult(policy=policy,iterations=iterations,converged=converged)
 

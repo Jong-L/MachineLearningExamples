@@ -77,11 +77,11 @@ def q_learning(env: GridWorld, config: QLearningConfig) -> QLearningResult:
         
         delta=np.max(np.abs(q_table-last_q_table))
         
+        iterations+=1
         if delta<config.threshold:
             no_improvement_count+=1
             if no_improvement_count>=config.patience:
                 converged=True
-                iterations=count
                 break
         else:
             no_improvement_count=0
