@@ -1,3 +1,8 @@
+"""
+
+"""
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -17,7 +22,7 @@ from optimal_solution_manager import (
 class NStepSARSAConfig:
     alpha: float = 0.005
     epsilon: float = 0.1
-    n_episodes: int = 2000
+    n_episodes: int = 1000
     episode_length: int = 100
     seed: int = 42
     threshold: float = 1e-6
@@ -71,6 +76,25 @@ def n_step_sarsa(env: GridWorld, config: NStepSARSAConfig) -> NStepSARSAResult:
             state=state_next
             action=action_next
         
+        # 对 episode 尾部剩余转移做截断 n-step 更新
+        while len(n_step_episode) > 0:
+            m = len(n_step_episode)
+            n_step_r = np.sum(
+                [n_step_episode[i][2] * pow(env.gamma, i) for i in range(m)]
+            )
+            state, action, reward = n_step_episode.pop(0)
+            s_t = env.state_to_index(state)
+            a_t = env.actions.index(action)
+            q_table[s_t, a_t] += config.alpha * (
+                n_step_r
+                + pow(env.gamma, m) * q_table[state_next_idx, action_next_idx]
+                - q_table[s_t, a_t]
+            )
+            # 更新策略
+            best_action_idx=np.argmax(q_table[s_t])
+            policy[s_t]=np.full(env.n_actions, config.epsilon/env.n_actions)
+            policy[s_t][best_action_idx]=1-config.epsilon+config.epsilon/env.n_actions
+
         iterations+=1
         delta=np.max(np.abs(q_table-last_q_table))
         if delta<config.threshold:

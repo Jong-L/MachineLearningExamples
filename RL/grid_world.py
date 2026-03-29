@@ -395,7 +395,7 @@ class GridWorld:
 
 if __name__ == "__main__":
     env = GridWorld()
-    env.render_with_policy()
+    #env.render_with_policy()
     
     # 测试两种方法计算状态值
     print("Testing get_true_value_by_policy (linear system solution)...")
