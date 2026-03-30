@@ -2,23 +2,24 @@
 策略为环境本身的随机策略
 用参数$\theta$的线性函数近似状态值
 特征向量为$\phi(s)=\phi(x,y)=[1, x, y, x \cdot y, x^2, y^2]^T$，其中$x$和$y$分别表示状态$s$的行和列坐标。
-1. 初始化参数向量 $\theta$ 为零向量
-2. 对于每个时间步：
-   - 选择当前状态 $s$
-   - 执行动作，观察下一状态 $s'$ 和奖励 $r$
-   - 计算TD误差：
-     $$\delta = r + \gamma \cdot V(s') - V(s)$$
-     其中 $V(s) = \phi(s)^T \theta$
-   - 更新参数：
-     $$\theta \leftarrow \theta + \alpha \cdot \delta \cdot \phi(s)$$
-   - 计算并记录近似价值函数与真实价值函数之间的均方根误差(RMSE)
-
-其中：
-- $\alpha$：学习率
-- $\gamma$：折扣因子
-- $\phi(s)$：状态s的特征向量
-- $V(s)$：状态s的近似价值函数
-
+$\hat{v_\pi(s,\theta)}=\phi(s)^T\cdot \theta$
+需要求解最优化问题：
+$$
+\min J(\theta)=\frac 12 E[(\hat{v_\pi(S,\theta)}-v_\pi(S))^2]
+$$
+这是一个凸优化问题，只需要求解梯度为0：
+$$
+\theta^* \quad s.t.\quad  E[\hat{v_\pi(S,\theta)}-v_\pi(S)]\nabla \hat{v_\pi(S,\theta)}=0
+$$
+进一步，即求解：
+$$
+g(\theta)=E[\hat{v_\pi(S,\theta)}-v_\pi(S)]\phi(S)=0
+$$
+采用随机梯度下降求解：
+$$
+\theta_{t+1}=\theta_t-\alpha_t \phi(s)(\hat{v_\pi(s,\theta)}-v_\pi(s))
+$$
+在这一节中，$v_\pi(s)$用$r_{t+1}+\gamma \hat{v_\pi}(s_{t+1},\theta)$代替。
 '''
 
 import numpy as np
@@ -44,14 +45,14 @@ class TDLinearStateValueResult:
     approx_v : np.ndarray
 
 
-def build_features(env):
-    features = np.zeros((env.n_states, 6))# 特征向量
+def build_feature(env):# 构建特征向量phi(s)=phi(x,y)
+    feature = np.zeros((env.n_states, 6))
     for s in range(env.n_states):
         r, c = env.index_to_state(s)
         rn = r / (env.rows - 1) #  计算归一化的行和列坐标
         cn = c / (env.cols - 1)
 
-        features[s] = np.array([
+        feature[s] = np.array([
             1.0,
             rn,
             cn,
@@ -59,36 +60,36 @@ def build_features(env):
             rn ** 2,
             cn ** 2,
         ])
-    return features
+    return feature
 
 
 def td_linear_policy_evaluation(
     env,
-    features,
+    feature,
     true_v,
     cfg: TDLinearStateValueConfig,
 ):
     rng = np.random.default_rng(cfg.seed)
-    theta = np.zeros(features.shape[1]) #  初始参数
+    theta = np.zeros(feature.shape[1]) #  初始参数,和特征向量的维度相同
     errors = [] #  用于存储每一步的误差值
 
     state_idx = rng.choice(env.n_states) #  随机选择一个起始状态
     
     for _ in range(cfg.max_iteration):
         state = env.index_to_state(state_idx)
-        next_state, action,reward = env.sample_next(state,None, rng)
-        next_idx = env.state_to_index(next_state)
+        state_next, action,reward = env.sample_next(state,None, rng)
+        state_next_idx = env.state_to_index(state_next)
 
-        v_s = features[state_idx] @ theta
-        v_next = features[next_idx] @ theta
+        v_s = feature[state_idx] @ theta
+        v_next = feature[state_next_idx] @ theta
         delta = reward + env.gamma * v_next - v_s
-        theta += cfg.alpha * delta * features[state_idx]
+        theta += cfg.alpha * delta * feature[state_idx]
 
-        approx_v = features @ theta
+        approx_v = feature @ theta
         rmse = np.sqrt(np.mean((approx_v - true_v) ** 2))
         errors.append(rmse)
 
-        state_idx = next_idx
+        state_idx = state_next_idx
 
     return TDLinearStateValueResult(
         theta=theta,
@@ -127,10 +128,10 @@ def plot_results(true_v, approx_v, errors):
     plt.show()
 
 def main():
-    env = GridWorld(gamma=0.9)
+    env = GridWorld()
     true_v_vec = env.get_true_value_by_policy()
     true_v = true_v_vec.reshape(env.rows, env.cols)
-    features = build_features(env)
+    feature = build_feature(env)
 
     cfg = TDLinearStateValueConfig(
         alpha=0.0005,
@@ -140,7 +141,7 @@ def main():
     start_time = time.perf_counter()
     result = td_linear_policy_evaluation(
         env=env,
-        features=features,
+        feature=feature,
         true_v=true_v_vec,
         cfg=cfg,
     )

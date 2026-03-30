@@ -57,12 +57,12 @@ def run_value_iteration(env: GridWorld, config: Optional[ValueIterationConfig] =
         best_actions.fill(0)
 
         for s_idx in range(env.n_states):
-            q_vals = np.array([q_value(env, v, s_idx, action) for action in env.actions], dtype=float)#所有动作的q值
-            best_actions[s_idx] = int(np.argmax(q_vals))
-            new_v[s_idx] = float(np.max(q_vals))#隐式地进行策略更新，这正是该方法为什么称之为值迭代，
-                                                #整个过程都是在更新值，直到最后才根据过程来得到策略。
-                                                #实际上，也可以显式地进行策略更新，然后根据策略来更新状态值，即V_{k+1}=R_{\pi_{k+1}} + \gamma P_{\pi_{k+1}}V_k
-        delta = float(np.max(np.abs(v - new_v)))
+            q_vals = np.array([q_value(env, v, s_idx, action) for action in env.actions])#所有动作的q值，注意传入的状态值是上一次迭代的值
+            #policy update
+            best_actions[s_idx] = np.argmax(q_vals)
+            #value update
+            new_v[s_idx] = np.max(q_vals)
+        delta = np.max(np.abs(v - new_v))
         v = new_v
         iterations = count + 1
         if delta < cfg.threshold:
