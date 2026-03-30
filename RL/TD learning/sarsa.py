@@ -31,7 +31,6 @@ class SARSAConfig:
 @dataclass
 class SARSAResult:
     policy: np.ndarray
-    q_table: np.ndarray
     iterations: int
     converged: bool
 

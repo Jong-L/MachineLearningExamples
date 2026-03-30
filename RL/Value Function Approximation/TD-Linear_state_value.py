@@ -45,32 +45,33 @@ class TDLinearStateValueResult:
     approx_v : np.ndarray
 
 
-def build_feature(env):# 构建特征向量phi(s)=phi(x,y)
-    feature = np.zeros((env.n_states, 6))
+def build_features(env):# 构建特征向量phi(s)=phi(x,y)
+    features = np.zeros((env.n_states, 6))
     for s in range(env.n_states):
         r, c = env.index_to_state(s)
         rn = r / (env.rows - 1) #  计算归一化的行和列坐标
         cn = c / (env.cols - 1)
 
-        feature[s] = np.array([
+        features[s] = np.array([
             1.0,
             rn,
             cn,
             rn * cn,
             rn ** 2,
-            cn ** 2,
+            cn ** 2
         ])
-    return feature
+    
+    return features
 
 
 def td_linear_policy_evaluation(
     env,
-    feature,
+    features,
     true_v,
     cfg: TDLinearStateValueConfig,
 ):
     rng = np.random.default_rng(cfg.seed)
-    theta = np.zeros(feature.shape[1]) #  初始参数,和特征向量的维度相同
+    theta = np.zeros(features.shape[1]) #  初始参数,和特征向量的维度相同
     errors = [] #  用于存储每一步的误差值
 
     state_idx = rng.choice(env.n_states) #  随机选择一个起始状态
@@ -80,12 +81,12 @@ def td_linear_policy_evaluation(
         state_next, action,reward = env.sample_next(state,None, rng)
         state_next_idx = env.state_to_index(state_next)
 
-        v_s = feature[state_idx] @ theta
-        v_next = feature[state_next_idx] @ theta
+        v_s = features[state_idx] @ theta
+        v_next = features[state_next_idx] @ theta
         delta = reward + env.gamma * v_next - v_s
-        theta += cfg.alpha * delta * feature[state_idx]
+        theta += cfg.alpha * delta * features[state_idx]
 
-        approx_v = feature @ theta
+        approx_v = features @ theta
         rmse = np.sqrt(np.mean((approx_v - true_v) ** 2))
         errors.append(rmse)
 
@@ -131,7 +132,7 @@ def main():
     env = GridWorld()
     true_v_vec = env.get_true_value_by_policy()
     true_v = true_v_vec.reshape(env.rows, env.cols)
-    feature = build_feature(env)
+    features = build_features(env)
 
     cfg = TDLinearStateValueConfig(
         alpha=0.0005,
@@ -141,7 +142,7 @@ def main():
     start_time = time.perf_counter()
     result = td_linear_policy_evaluation(
         env=env,
-        feature=feature,
+        features=features,
         true_v=true_v_vec,
         cfg=cfg,
     )
