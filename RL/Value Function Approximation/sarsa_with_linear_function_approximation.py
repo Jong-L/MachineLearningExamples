@@ -3,6 +3,8 @@ SARSA with Linear Function Approximation
 在 SARSA 算法中使用线性函数近似 Q 值
 特征向量构造方法与 TD-Linear_state_value.py 一致
 可以看到效果很差，但逻辑上是正确的。
+但是视频中的效果又很好，后面再研究。
+采用线性函数近似 Q 值的Q learning也没必要写了，直接进入DQN
 """
 
 import numpy as np
@@ -24,7 +26,7 @@ from optimal_solution_manager import (
 class SarsaLinearConfig:
     alpha: float = 0.005
     epsilon: float = 0.1  # epsilon greedy policy
-    n_episodes: int = 1000
+    n_episodes: int = 2000
     episode_length: int = 100
     seed: int = 42
 

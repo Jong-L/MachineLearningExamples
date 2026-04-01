@@ -36,7 +36,7 @@ class GridWorld:
         self.target = target_pos
 
     def set_forbidden(self, forbidden_pos: Set[Tuple[int, int]] = None)-> Set[Tuple[int, int]]:
-        if forbidden_pos is None:
+        if forbidden_pos is None:   
             forbidden_pos = {
                 (1, 1), (1, 2),
                 (2, 2),
