@@ -1,5 +1,5 @@
 """
-Deep Q-Network with Experience Replay
+Deep Q-Network with Experience Replay (NumPy 实现)
 """
 
 import os
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import time
 import sys
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import List, Tuple
 from collections import deque
 import random
@@ -19,15 +19,8 @@ import random
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
 
-# 尝试导入深度学习框架
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    USE_TORCH = True
-except ImportError:
-    USE_TORCH = False
-    print("未检测到 PyTorch，将使用 NumPy 实现简单的神经网络")
+# 导入 NumPy 神经网络实现
+from numpy_network import NeuralNetwork
 
 
 @dataclass
@@ -66,110 +59,17 @@ class ReplayBuffer:
         return len(self.buffer)
 
 
-class NeuralNetwork:
-    """使用 NumPy 实现的简单神经网络（当没有 PyTorch 时使用）"""
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        
-        # 初始化权重（Xavier 初始化）
-        self.W1 = np.random.randn(input_dim, hidden_dim) * np.sqrt(2.0 / input_dim)
-        self.b1 = np.zeros((1, hidden_dim))
-        self.W2 = np.random.randn(hidden_dim, hidden_dim) * np.sqrt(2.0 / hidden_dim)
-        self.b2 = np.zeros((1, hidden_dim))
-        self.W3 = np.random.randn(hidden_dim, output_dim) * np.sqrt(2.0 / hidden_dim)
-        self.b3 = np.zeros((1, output_dim))
-    
-    def relu(self, x):
-        return np.maximum(0, x)
-    
-    def relu_derivative(self, x):
-        return (x > 0).astype(float)
-    
-    def forward(self, X):
-        """前向传播"""
-        self.z1 = X @ self.W1 + self.b1
-        self.a1 = self.relu(self.z1)
-        self.z2 = self.a1 @ self.W2 + self.b2
-        self.a2 = self.relu(self.z2)
-        self.z3 = self.a2 @ self.W3 + self.b3
-        return self.z3
-    
-    def backward(self, X, y_pred, y_true, learning_rate):
-        """反向传播"""
-        m = X.shape[0]
-        
-        # 输出层误差
-        delta3 = (y_pred - y_true) / m
-        dW3 = self.a2.T @ delta3
-        db3 = np.sum(delta3, axis=0, keepdims=True)
-        
-        # 隐藏层 2 误差
-        delta2 = (delta3 @ self.W3.T) * self.relu_derivative(self.z2)
-        dW2 = self.a1.T @ delta2
-        db2 = np.sum(delta2, axis=0, keepdims=True)
-        
-        # 隐藏层 1 误差
-        delta1 = (delta2 @ self.W2.T) * self.relu_derivative(self.z1)
-        dW1 = X.T @ delta1
-        db1 = np.sum(delta1, axis=0, keepdims=True)
-        
-        # 更新权重
-        self.W3 -= learning_rate * dW3
-        self.b3 -= learning_rate * db3
-        self.W2 -= learning_rate * dW2
-        self.b2 -= learning_rate * db2
-        self.W1 -= learning_rate * dW1
-        self.b1 -= learning_rate * db1
-    
-    def copy_weights_from(self, other):
-        """从另一个网络复制权重"""
-        self.W1 = other.W1.copy()
-        self.b1 = other.b1.copy()
-        self.W2 = other.W2.copy()
-        self.b2 = other.b2.copy()
-        self.W3 = other.W3.copy()
-        self.b3 = other.b3.copy()
-
-
-class TorchDQN(nn.Module):
-    """使用 PyTorch 实现的 DQN 网络"""
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(TorchDQN, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, output_dim)
-        self.relu = nn.ReLU()
-    
-    def forward(self, x):
-        x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
 class DQNAgent:
-    """DQN Agent"""
+    """DQN Agent (NumPy 版本)"""
     def __init__(self, config: DQNConfig):
         self.config = config
         self.replay_buffer = ReplayBuffer(config.replay_buffer_size)
         self.epsilon = config.epsilon
         
-        if USE_TORCH:
-            # 使用 PyTorch
-            self.main_network = TorchDQN(config.state_dim, config.hidden_dim, config.action_dim)
-            self.target_network = TorchDQN(config.state_dim, config.hidden_dim, config.action_dim)
-            self.target_network.load_state_dict(self.main_network.state_dict())
-            self.optimizer = optim.Adam(self.main_network.parameters(), lr=config.learning_rate)
-            self.criterion = nn.MSELoss()
-            self.use_torch = True
-        else:
-            # 使用 NumPy
-            self.main_network = NeuralNetwork(config.state_dim, config.hidden_dim, config.action_dim)
-            self.target_network = NeuralNetwork(config.state_dim, config.hidden_dim, config.action_dim)
-            self.target_network.copy_weights_from(self.main_network)
-            self.use_torch = False
+        # 使用 NumPy 神经网络
+        self.main_network = NeuralNetwork(config.state_dim, config.hidden_dim, config.action_dim)
+        self.target_network = NeuralNetwork(config.state_dim, config.hidden_dim, config.action_dim)
+        self.target_network.copy_weights_from(self.main_network)
     
     def get_q_values(self, state, network="main"):
         """获取 Q 值"""
@@ -182,9 +82,6 @@ class DQNAgent:
             else:
                 # 对于 grid world，假设状态是 (row, col)
                 row, col = state
-                # 需要知道环境的 cols，这里使用一个通用方法
-                # 实际上我们应该传入环境对象或者预先知道状态维度
-                # 简单处理：如果是 tuple，第一个元素*5+第二个元素（针对 5x5 网格）
                 state_idx = int(row * 5 + col)
             
             state_vector = np.zeros(self.config.state_dim)
@@ -197,20 +94,11 @@ class DQNAgent:
             # 已经是向量形式
             state_vector = state
         
-        if self.use_torch:
-            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0)
-            with torch.no_grad():
-                if network == "main":
-                    q_values = self.main_network(state_tensor)
-                else:
-                    q_values = self.target_network(state_tensor)
-            return q_values.numpy()[0]
+        state_vector = state_vector.reshape(1, -1)
+        if network == "main":
+            return self.main_network.forward(state_vector)[0]
         else:
-            state_vector = state_vector.reshape(1, -1)
-            if network == "main":
-                return self.main_network.forward(state_vector)[0]
-            else:
-                return self.target_network.forward(state_vector)[0]
+            return self.target_network.forward(state_vector)[0]
     
     def select_action(self, state, env):
         """ε-greedy 策略选择动作"""
@@ -239,8 +127,6 @@ class DQNAgent:
         # 将状态转换为 one-hot 向量
         def to_one_hot(state, dim):
             if isinstance(state, tuple):
-                # 假设是 grid world 的 (row, col) 格式
-                # 需要根据实际环境调整
                 idx = int(state[0] * 5 + state[1])  # 针对 5x5 网格
             else:
                 idx = int(state)
@@ -251,57 +137,28 @@ class DQNAgent:
         states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in states])
         next_states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in next_states])
         
-        if self.use_torch:
-            # PyTorch 实现
-            states_tensor = torch.FloatTensor(states_onehot)
-            actions_tensor = torch.LongTensor(actions)
-            rewards_tensor = torch.FloatTensor(rewards)
-            next_states_tensor = torch.FloatTensor(next_states_onehot)
-            dones_tensor = torch.FloatTensor(dones)
-            
-            # 计算当前 Q 值
-            current_q_values = self.main_network(states_tensor).gather(
-                1, actions_tensor.unsqueeze(1)
-            ).squeeze(1)
-            
-            # 计算目标 Q 值（使用 target network）
-            with torch.no_grad():
-                next_q_values = self.target_network(next_states_tensor).max(1)[0]
-                target_q_values = rewards_tensor + self.config.gamma * next_q_values * (1 - dones_tensor)
-            
-            # 计算损失并优化
-            loss = self.criterion(current_q_values, target_q_values)
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            
-            return loss.item()
-        else:
-            # NumPy 实现
-            # 计算当前 Q 值
-            current_q_values = self.main_network.forward(states_onehot)
-            
-            # 计算目标 Q 值
-            next_q_values = self.target_network.forward(next_states_onehot)
-            max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)
-            
-            # 构建目标值
-            targets = current_q_values.copy()
-            for i in range(len(actions)):
-                target = rewards[i] + self.config.gamma * max_next_q_values[i][0] * (1 - dones[i])
-                targets[i, actions[i]] = target
-            
-            # 反向传播更新
-            self.main_network.backward(states_onehot, current_q_values, targets, self.config.learning_rate)
-            
-            return np.mean((targets - current_q_values) ** 2)
+        # NumPy 实现
+        # 计算当前 Q 值
+        current_q_values = self.main_network.forward(states_onehot)
+        
+        # 计算目标 Q 值
+        next_q_values = self.target_network.forward(next_states_onehot)
+        max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)
+        
+        # 构建目标值
+        targets = current_q_values.copy()
+        for i in range(len(actions)):
+            target = rewards[i] + self.config.gamma * max_next_q_values[i][0] * (1 - dones[i])
+            targets[i, actions[i]] = target
+        
+        # 反向传播更新
+        self.main_network.backward(states_onehot, current_q_values, targets, self.config.learning_rate)
+        
+        return np.mean((targets - current_q_values) ** 2)
     
     def update_target_network(self):
         """更新 target network"""
-        if self.use_torch:
-            self.target_network.load_state_dict(self.main_network.state_dict())
-        else:
-            self.target_network.copy_weights_from(self.main_network)
+        self.target_network.copy_weights_from(self.main_network)
     
     def decay_epsilon(self):
         """衰减探索率"""
@@ -314,8 +171,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
     rewards_history = []
     loss_history = []
     
-    print(f"开始训练 DQN...")
-    print(f"使用框架：{'PyTorch' if USE_TORCH else 'NumPy'}")
+    print(f"开始训练 DQN (NumPy 版本)...")
     print(f"总 episode 数：{n_episodes}")
     print(f"经验回放缓冲区大小：{config.replay_buffer_size}")
     print(f"批次大小：{config.batch_size}")
@@ -501,5 +357,4 @@ if __name__ == "__main__":
     evaluate_agent(agent, env, n_episodes=100)
     
     print("\n可视化学习到的状态值和策略...")
-    render_with_value_and_policy(agent, env, title="DQN: Learned State Values and Optimal Policy")
-
+    render_with_value_and_policy(agent, env, title="DQN (NumPy): Learned State Values and Optimal Policy")

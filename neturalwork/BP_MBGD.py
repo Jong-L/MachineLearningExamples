@@ -1,5 +1,5 @@
-"""BP_BGD.py
-两层的前馈神经网络实现异或网络，使用批量梯度下降法进行训练.
+"""BP_MBGD.py
+两层的前馈神经网络实现异或网络，使用小批量梯度下降法进行训练.
 代码中符号保持与书中一致
 d: 输入层神经元个数
 q: 隐藏层神经元个数
@@ -15,6 +15,7 @@ alpha:隐层神经元的输入
 b: 隐层神经元的输出
 beta: 输出层神经元的输入
 y_hat:输出层神经元的输出
+B: 批次大小
 """
 
 import numpy as np
@@ -41,15 +42,17 @@ l = 1# 输出层神经元个数
 eta = 0.05# 学习率
 max_iterations= 50000# 迭代次数
 threshold = 0.001# 误差阈值
+B = 2# 批次大小
 
-class BP_BGD:
-    def __init__(self, d, q, l, eta, max_iter, threshold,seed):
+class BP_MBGD:
+    def __init__(self, d, q, l, eta, max_iter, threshold, B, seed):
         self.d = d
         self.q = q
         self.l = l
         self.eta = eta
         self.max_iter = max_iter
         self.threshold = threshold
+        self.B = B
 
         # 权重与阈值
         np.random.seed(seed)
@@ -66,27 +69,43 @@ class BP_BGD:
         return b, Y_hat
     
     def train(self, X, Y):
+        m=X.shape[1]
+        num_batches = m // self.B# 批次数量
+        
         for count in range(self.max_iter):
-            m=X.shape[1]
-            b,Y_hat=self.forward(X)
+            # 随机打乱样本顺序
+            indices = np.random.permutation(m)
+            X_shuffled = X[:, indices]
+            Y_shuffled = Y[:, indices]
             
-            g=(Y-Y_hat)*sigmoid_derivative(Y_hat)
-            e=(self.w @ g)*sigmoid_derivative(b)
+            # 按批次遍历
+            for batch_idx in range(num_batches):
+                # 获取当前批次数据
+                start_idx = batch_idx * self.B
+                end_idx = start_idx + self.B
+                X_batch = X_shuffled[:, start_idx:end_idx]
+                Y_batch = Y_shuffled[:, start_idx:end_idx]
+                
+                b, Y_hat = self.forward(X_batch)
+                
+                g=(Y_batch-Y_hat)*sigmoid_derivative(Y_hat)
+                e=(self.w @ g)*sigmoid_derivative(b)
 
-            delta_w=self.eta*(b@g.T)/m
-            delta_v=self.eta*(X@e.T)/m
-            delta_theta=-self.eta*(np.sum(g, axis=1, keepdims=True))/m
-            delta_gamma=-self.eta*(np.sum(e, axis=1, keepdims=True))/m
+                delta_w=self.eta*(b@g.T)/self.B
+                delta_v=self.eta*(X_batch@e.T)/self.B
+                delta_theta=-self.eta*(np.sum(g, axis=1, keepdims=True))/self.B
+                delta_gamma=-self.eta*(np.sum(e, axis=1, keepdims=True))/self.B
+                
+                self.w+=delta_w
+                self.v+=delta_v
+                self.theta+=delta_theta
+                self.gamma+=delta_gamma
             
-            self.w+=delta_w
-            self.v+=delta_v
-            self.theta+=delta_theta
-            self.gamma+=delta_gamma
-
+            # 累计误差
             if (count+1) % 1000 == 0:
-                # 计算累计误差
-                E_k = 0.5 * np.sum((Y - Y_hat) ** 2)
-                E = E_k / m  # 平均误差
+                _, Y_hat_full = self.forward(X)
+                E_k = 0.5 * np.sum((Y - Y_hat_full) ** 2)
+                E = E_k / m
                 
                 if E < self.threshold:
                     print(f"\n在第 {count + 1} 次迭代时收敛！")
@@ -94,6 +113,9 @@ class BP_BGD:
                     break
         
         print(f"\n达到最大迭代次数 {self.max_iter}")
+        _, Y_hat_full = self.forward(X)
+        E_k = 0.5 * np.sum((Y - Y_hat_full) ** 2)
+        E = E_k / m
         print(f"最终平均误差: {E:.6f}")
     
     def predict(self, X):
@@ -101,7 +123,7 @@ class BP_BGD:
         return Y_hat
 
 if __name__ == "__main__":
-    bp_bgd = BP_BGD(d, q, l, eta, max_iterations, threshold, seed=0)
-    bp_bgd.train(X, Y)
-    y_hat = bp_bgd.predict(X)
+    bp_mbgd = BP_MBGD(d, q, l, eta, max_iterations, threshold, B, seed=0)
+    bp_mbgd.train(X, Y)
+    y_hat = bp_mbgd.predict(X)
     print("输出结果为：",y_hat)

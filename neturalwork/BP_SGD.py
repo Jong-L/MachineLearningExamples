@@ -29,17 +29,21 @@ def sigmoid_derivative(x):
 X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
 # 输出数据集
 y = np.array([[0], [1], [1], [0]])
+#调整输入输出矩阵
+X=X.T#(d,m)
+Y=y.T#(l,m)
+
 
 # 参数设置
 d = 2# 输入层神经元个数
 q = 3# 隐藏层神经元个数
 l = 1# 输出层神经元个数
 eta = 0.05# 学习率
-max_iterations= 100000# 迭代次数
-threshold = 0.01# 误差阈值
+max_iterations= 50000# 迭代次数
+threshold = 0.001# 误差阈值
 
 class BP_SGD:
-    def __init__(self, d, q, l, eta, max_iter, threshold):
+    def __init__(self, d, q, l, eta, max_iter, threshold, seed):
         self.d = d
         self.q = q
         self.l = l
@@ -48,6 +52,7 @@ class BP_SGD:
         self.threshold = threshold
 
         # 权重与阈值
+        np.random.seed(seed)
         self.v=np.random.rand(self.d,self.q)
         self.w=np.random.rand(self.q,self.l)
         self.gamma=np.random.rand(self.q,1)
@@ -64,11 +69,11 @@ class BP_SGD:
         y_hat = sigmoid(beta - self.theta)         # 输出层输出
         return b, y_hat
 
-    def train(self,X,y):
+    def train(self,X,Y):
         for count in range(self.max_iter):
-            k=np.random.randint(0,X.shape[0])
-            x_k=X[k].reshape(-1,1)#转换为列向量
-            y_k=y[k].reshape(-1,1)
+            k=np.random.randint(0,X.shape[1])
+            x_k=X[:,[k]]
+            y_k=Y[:,[k]]
             #计算\hat{y}
             b, y_hat = self.forward(x_k)
 
@@ -91,16 +96,17 @@ class BP_SGD:
             #计算累计误差
             result_y_hat=[]
             E=0
-            if (count+1) % 1000 == 0:#每1000次迭代打印一次误差
-                for k in range(X.shape[0]):
-                    x_k=X[k].reshape(-1,1)
-                    y_k=y[k].reshape(-1,1)
+            if (count+1) % 1000 == 0:#每1000次迭代
+                for k in range(X.shape[1]):
+                    x_k=X[:,[k]]
+                    y_k=Y[:,[k]]
                     b, y_hat = self.forward(x_k)
                     result_y_hat.append(y_hat)
                     E_k=0.5*(y_k-y_hat)**2
                     E+=E_k
+                E=np.sum(E)/X.shape[1]# 计算平均误差
                 if E < self.threshold:
-                    print(f"训练完成，迭代次数为：{count}")
+                    print(f"训练收敛，迭代次数为：{count}")
                     break
         
         if count == self.max_iter-1:
@@ -112,8 +118,8 @@ class BP_SGD:
         return self.forward(x)
 
 if __name__ == "__main__":
-    bp_sgd = BP_SGD(d, q, l, eta, max_iterations, threshold)
-    bp_sgd.train(X, y)
+    bp_sgd = BP_SGD(d, q, l, eta, max_iterations, threshold, seed=0)
+    bp_sgd.train(X, Y)
     b,y_hat=bp_sgd.bp_network(np.array([[0], [0]]))#测试
     print("测试结果为：",y_hat)
 
