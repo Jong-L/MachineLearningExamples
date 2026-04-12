@@ -110,7 +110,7 @@ def main():
     N_SAMPLES = 7000  # 使用的样本数量
     HIDDEN_UNITS = 64  # 隐藏层神经元数量
     LEARNING_RATE = 1  # 学习率
-    MAX_ITER = 1000  # 最大迭代次数
+    MAX_ITER = 3000  # 最大迭代次数
     
     print(f"\n配置参数:")
     print(f"  样本数量: {N_SAMPLES}")
@@ -128,7 +128,7 @@ def main():
     )
     
     # 创建神经网络
-    layer_sizes = [784,  HIDDEN_UNITS, 10]
+    layer_sizes = [784, HIDDEN_UNITS, 10]
     
     print(f"\n网络结构: {layer_sizes}")
     print("正在创建神经网络...")

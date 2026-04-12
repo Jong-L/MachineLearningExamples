@@ -121,6 +121,9 @@ if __name__ == "__main__":
 
     bp_sgd = BP_SGD(d, q, l, eta, max_iterations, threshold, seed=0)
     bp_sgd.train(X, Y)
+
     for k in range(X.shape[1]):
-        print(f"输入为：{X[:,[k]]}, 预测结果为：{bp_sgd.predict(X[:,[k]])[0][0]:.6f}")
+        x_input = X[:, k]
+        prediction = bp_sgd.predict(X[:, [k]])[0][0]
+        print(f"输入: {x_input.tolist()} 预测: {prediction:.6f}")
 
