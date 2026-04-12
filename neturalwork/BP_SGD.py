@@ -25,22 +25,6 @@ def sigmoid(x):
 def sigmoid_derivative(x):
     return x * (1 - x)
 
-# 输入数据集
-X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-# 输出数据集
-y = np.array([[0], [1], [1], [0]])
-#调整输入输出矩阵
-X=X.T#(d,m)
-Y=y.T#(l,m)
-
-
-# 参数设置
-d = 2# 输入层神经元个数
-q = 3# 隐藏层神经元个数
-l = 1# 输出层神经元个数
-eta = 0.05# 学习率
-max_iterations= 50000# 迭代次数
-threshold = 0.001# 误差阈值
 
 class BP_SGD:
     def __init__(self, d, q, l, eta, max_iter, threshold, seed):
@@ -94,17 +78,16 @@ class BP_SGD:
             self.gamma+=delta_gamma
 
             #计算累计误差
-            result_y_hat=[]
+            Y_pred=np.array([])
             E=0
             if (count+1) % 1000 == 0:#每1000次迭代
                 for k in range(X.shape[1]):
                     x_k=X[:,[k]]
                     y_k=Y[:,[k]]
                     b, y_hat = self.forward(x_k)
-                    result_y_hat.append(y_hat)
-                    E_k=0.5*(y_k-y_hat)**2
-                    E+=E_k
-                E=np.sum(E)/X.shape[1]# 计算平均误差
+                    Y_pred=np.append(Y_pred,y_hat)
+                
+                E=self.compute_loss(Y_pred,Y)
                 if E < self.threshold:
                     print(f"训练收敛，迭代次数为：{count}")
                     break
@@ -112,14 +95,32 @@ class BP_SGD:
         if count == self.max_iter-1:
             print("达到最大迭代次数，最终误差为：",E)
         
-        print("最终预测结果为：",result_y_hat)
 
-    def bp_network(self,x):
-        return self.forward(x)
+    def compute_loss(self, Y_pred, Y):
+        return np.mean(np.square(Y_pred - Y))/2
+
+    def predict(self,x):
+        b, y_hat = self.forward(x)
+        return y_hat
 
 if __name__ == "__main__":
+    # 输入数据集
+    X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+    # 输出数据集
+    y = np.array([[0], [1], [1], [0]])
+    #调整输入输出矩阵
+    X=X.T#(d,m)
+    Y=y.T#(l,m)
+
+    d = 2# 输入层神经元个数
+    q = 3# 隐藏层神经元个数
+    l = 1# 输出层神经元个数
+    eta = 0.05# 学习率
+    max_iterations= 50000# 迭代次数
+    threshold = 0.001# 误差阈值
+
     bp_sgd = BP_SGD(d, q, l, eta, max_iterations, threshold, seed=0)
     bp_sgd.train(X, Y)
-    b,y_hat=bp_sgd.bp_network(np.array([[0], [0]]))#测试
-    print("测试结果为：",y_hat)
+    for k in range(X.shape[1]):
+        print(f"输入为：{X[:,[k]]}, 预测结果为：{bp_sgd.predict(X[:,[k]])[0][0]:.6f}")
 

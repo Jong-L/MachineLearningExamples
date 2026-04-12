@@ -180,7 +180,7 @@ $$\Delta \boldsymbol{\gamma} = -\frac {\eta}{m}\sum_{i=1}^m\mathbf{e}_i$$
 
 ## MBGD
 
-BGD的代码实现可以比较轻易地改为MBGD，以B=2为例，每次从$X_{d\times m}$中随机选取两列组成新矩阵作为输入矩阵，相应的也从$Y_{l\times m}$得到输出矩阵，用它们更新一次网络的参数，然后选择剩下的两列，然后循环。
+BGD的代码实现可以比较轻易地改为MBGD，以B=2为例，每次从$X_{d\times m}$中随机选取两列组成新矩阵作为输入矩阵，相应的也从$Y_{l\times m}$得到输出矩阵，用它们更新一次网络的参数，然后选择剩下的两列，然后循环。可以把BGD当成$B=m$的MBGD。
 
 # 任意层数的前馈神经网络（BGD）
 
@@ -286,6 +286,15 @@ $$
 **参数更新**:
 $$
 \mathbf{W}^{(l)}\leftarrow \mathbf{W}^{(l)}-\eta \mathbf{Z}^{(l-1)}(\mathbf{\Delta}^{(l)})^T\\
-\mathbf{b}^{(l)} \leftarrow \mathbf{b}^{(l)} + \eta \sum_{\text{axis}=1} \boldsymbol{\Delta}^{(l)}
+\mathbf{b}^{(l)} \leftarrow \mathbf{b}^{(l)} + \eta\sum_{\text{axis}=1} \boldsymbol{\Delta}^{(l)}
 $$
 从第$L$层开始迭代地更新参数即可。
+
+
+
+
+
+
+
+
+

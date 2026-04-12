@@ -104,20 +104,21 @@ class BP_MBGD:
             # 累计误差
             if (count+1) % 1000 == 0:
                 _, Y_hat_full = self.forward(X)
-                E_k = 0.5 * np.sum((Y - Y_hat_full) ** 2)
-                E = E_k / m
+                E = self.compute_loss(Y_hat_full, Y)
                 
                 if E < self.threshold:
                     print(f"\n在第 {count + 1} 次迭代时收敛！")
                     print(f"最终平均误差: {E:.6f}")
                     break
         
-        print(f"\n达到最大迭代次数 {self.max_iter}")
-        _, Y_hat_full = self.forward(X)
-        E_k = 0.5 * np.sum((Y - Y_hat_full) ** 2)
-        E = E_k / m
-        print(f"最终平均误差: {E:.6f}")
+        if count == self.max_iter - 1:
+            print(f"\n达到最大迭代次数 {self.max_iter}")
+            _, Y_hat_full = self.forward(X)
+            E = self.compute_loss(Y_hat_full, Y)
+            print(f"最终平均误差: {E:.6f}")
     
+    def compute_loss(self, Y_pred, Y):
+        return np.mean(np.square(Y_pred - Y)) / (2 * Y.shape[1])
     def predict(self, X):
         b, Y_hat = self.forward(X)
         return Y_hat

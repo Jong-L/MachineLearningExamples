@@ -106,15 +106,11 @@ def evaluate_predictions(Y_pred, Y_true, lb):
 
 def main():
     """主函数"""
-    print("=" * 60)
-    print("MNIST 手写数字识别 - 多层前馈神经网络测试")
-    print("=" * 60)
-    
     # 配置参数
-    N_SAMPLES = 5000  # 使用的样本数量（减少以加快训练速度）
-    HIDDEN_UNITS = 128  # 隐藏层神经元数量
-    LEARNING_RATE = 0.1  # 学习率
-    MAX_ITER = 100  # 最大迭代次数
+    N_SAMPLES = 7000  # 使用的样本数量
+    HIDDEN_UNITS = 64  # 隐藏层神经元数量
+    LEARNING_RATE = 1  # 学习率
+    MAX_ITER = 1000  # 最大迭代次数
     
     print(f"\n配置参数:")
     print(f"  样本数量: {N_SAMPLES}")
@@ -132,10 +128,7 @@ def main():
     )
     
     # 创建神经网络
-    # 输入层: 784 (28x28 像素)
-    # 隐藏层: HIDDEN_UNITS
-    # 输出层: 10 (0-9 数字)
-    layer_sizes = [784, HIDDEN_UNITS, 10]
+    layer_sizes = [784,  HIDDEN_UNITS, 10]
     
     print(f"\n网络结构: {layer_sizes}")
     print("正在创建神经网络...")
