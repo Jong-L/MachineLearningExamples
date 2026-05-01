@@ -1,5 +1,5 @@
 """
-Deep Q-Network with Experience Replay (PyTorch 实现)
+Deep Q-Network with Experience Replay
 """
 
 import os
@@ -39,7 +39,6 @@ class DQNConfig:
     action_dim: int = 5  # 动作维度
     hidden_dim: int = 64  # 隐藏层维度
 
-
 class ReplayBuffer:
     """经验回放缓冲区"""
     def __init__(self, capacity: int):
@@ -59,7 +58,6 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-
 class TorchDQN(nn.Module):
     """使用 PyTorch 实现的 DQN 网络"""
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -75,33 +73,24 @@ class TorchDQN(nn.Module):
         x = self.fc3(x)
         return x
 
-
 class DQNAgent:
-    """DQN Agent (PyTorch 版本)"""
-    def __init__(self, config: DQNConfig):
+    def __init__(self, config: DQNConfig, env: GridWorld):
         self.config = config
+        self.env = env
         self.replay_buffer = ReplayBuffer(config.replay_buffer_size)
         self.epsilon = config.epsilon
         
-        # 使用 PyTorch
         self.main_network = TorchDQN(config.state_dim, config.hidden_dim, config.action_dim)
         self.target_network = TorchDQN(config.state_dim, config.hidden_dim, config.action_dim)
-        self.target_network.load_state_dict(self.main_network.state_dict())
+        self.target_network.load_state_dict(self.main_network.state_dict())#复制参数
         self.optimizer = optim.Adam(self.main_network.parameters(), lr=config.learning_rate)
         self.criterion = nn.MSELoss()
     
-    def get_q_values(self, state, network="main"):
+    def get_q_values(self,state, network="main"):
         """获取 Q 值"""
         # 将状态转换为 one-hot 向量
         if isinstance(state, tuple):
-            state_idx = self.config.state_dim
-            # 如果 state 是元组，转换为索引
-            if hasattr(self, 'env'):
-                state_idx = self.env.state_to_index(state)
-            else:
-                # 对于 grid world，假设状态是 (row, col)
-                row, col = state
-                state_idx = int(row * 5 + col)
+            state_idx = self.env.state_to_index(state)
             
             state_vector = np.zeros(self.config.state_dim)
             state_vector[state_idx] = 1.0
@@ -119,15 +108,14 @@ class DQNAgent:
                 q_values = self.main_network(state_tensor)
             else:
                 q_values = self.target_network(state_tensor)
+
         return q_values.numpy()[0]
     
-    def select_action(self, state, env):
+    def select_action(self, state):
         """ε-greedy 策略选择动作"""
         if random.random() < self.epsilon:
-            # 探索：随机选择动作
-            return random.randint(0, env.n_actions - 1)
+            return random.randint(0, self.env.n_actions - 1)
         else:
-            # 利用：选择最优动作
             q_values = self.get_q_values(state)
             return np.argmax(q_values)
     
@@ -141,24 +129,23 @@ class DQNAgent:
             return None
         
         # 采样批次
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(
-            self.config.batch_size
-        )
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.config.batch_size)
         
         # 将状态转换为 one-hot 向量
         def to_one_hot(state, dim):
             if isinstance(state, tuple):
-                idx = int(state[0] * 5 + state[1])  # 针对 5x5 网格
+                idx = self.env.state_to_index(state)
             else:
                 idx = int(state)
+            
             vec = np.zeros(dim)
             vec[idx] = 1.0
             return vec
         
         states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in states])
         next_states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in next_states])
-        
-        # PyTorch 实现
+
+        # 转换为张量
         states_tensor = torch.FloatTensor(states_onehot)
         actions_tensor = torch.LongTensor(actions)
         rewards_tensor = torch.FloatTensor(rewards)
@@ -194,7 +181,7 @@ class DQNAgent:
 
 def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = False):
     """训练 DQN agent"""
-    agent = DQNAgent(config)
+    agent = DQNAgent(config,env)
     rewards_history = []
     loss_history = []
     
@@ -216,7 +203,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
         
         while not done and step_count < max_steps:
             # 选择动作
-            action = agent.select_action(state, env)
+            action = agent.select_action(state)
             
             # 执行动作
             next_state, reward = env.step(state, env.actions[action])
@@ -233,7 +220,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
             step_count += 1
             
             # 从经验回放中学习
-            loss = agent.update()
+            loss = agent.update(env)
             if loss is not None:
                 loss_history.append(loss)
         

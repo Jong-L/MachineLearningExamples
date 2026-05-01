@@ -58,7 +58,7 @@ def sarsa(env: GridWorld, config: SARSAConfig) -> SARSAResult:
             # 根据 s_{t+1} 的当前策略采样 a_{t+1}
             action_next_idx = rng.choice(env.n_actions, p=policy[state_next_idx])
             action_next = env.actions[action_next_idx]
-
+            
             q_table[state_idx,action_idx]+=config.alpha*(reward+env.gamma*q_table[state_next_idx,action_next_idx]-q_table[state_idx,action_idx])
 
             #更新策略，epsilon greedy

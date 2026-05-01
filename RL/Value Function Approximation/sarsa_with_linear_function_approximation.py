@@ -103,8 +103,10 @@ def sarsa_linear(env: GridWorld, config: SarsaLinearConfig) -> SarsaLinearResult
             q_next = q_value(theta, features, state_next_idx, action_next_idx)
             delta = reward + env.gamma * q_next - q_s
             
+            # 更新参数
             theta += config.alpha * delta * features[state_idx, action_idx]
             
+            # 更新策略
             best_action_idx = np.argmax([q_value(theta, features, state_idx, a_idx) for a_idx in range(env.n_actions)])
             policy[state_idx]=np.full((env.n_actions), config.epsilon/env.n_actions)
             policy[state_idx][best_action_idx] = 1-config.epsilon+config.epsilon/env.n_actions
