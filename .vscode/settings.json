@@ -2,6 +2,6 @@
     "Codegeex.RepoIndex": true,
     "Codegeex.CompletionDelay": 0.1,
     "Codegeex.GenerationPreference": "line by line",
-    "Codegeex.Chat.LanguagePreference": "English",
+    "Codegeex.Chat.LanguagePreference": "中文",
     "Codegeex.Comment.LanguagePreference": "中文"
 }

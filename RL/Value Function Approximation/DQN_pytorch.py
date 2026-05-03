@@ -87,31 +87,23 @@ class DQNAgent:
         self.criterion = nn.MSELoss()
     
     def get_q_values(self,state, network="main"):
-        """获取 Q 值"""
+        """向前传播获取 Q 值"""
         # 将状态转换为 one-hot 向量
-        if isinstance(state, tuple):
-            state_idx = self.env.state_to_index(state)
-            
-            state_vector = np.zeros(self.config.state_dim)
-            state_vector[state_idx] = 1.0
-        elif isinstance(state, int):
-            # 如果 state 是索引，转换为 one-hot
-            state_vector = np.zeros(self.config.state_dim)
-            state_vector[state] = 1.0
-        else:
-            # 已经是向量形式
-            state_vector = state
+        state_idx = self.env.state_to_index(state)
+        
+        state_vector = np.zeros(self.config.state_dim)
+        state_vector[state_idx] = 1.0
         
         state_tensor = torch.FloatTensor(state_vector).unsqueeze(0)
-        with torch.no_grad():
+        with torch.no_grad():#防止梯度更新
             if network == "main":
                 q_values = self.main_network(state_tensor)
             else:
                 q_values = self.target_network(state_tensor)
 
-        return q_values.numpy()[0]
+        return q_values.numpy()[0]#返回一维数组
     
-    def select_action(self, state):
+    def select_action(self, state)-> int:
         """ε-greedy 策略选择动作"""
         if random.random() < self.epsilon:
             return random.randint(0, self.env.n_actions - 1)
@@ -133,16 +125,13 @@ class DQNAgent:
         
         # 将状态转换为 one-hot 向量
         def to_one_hot(state, dim):
-            if isinstance(state, tuple):
-                idx = self.env.state_to_index(state)
-            else:
-                idx = int(state)
+            idx = self.env.state_to_index(state)
             
             vec = np.zeros(dim)
             vec[idx] = 1.0
             return vec
         
-        states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in states])
+        states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in states])#shape=(batch_size, state_dim)
         next_states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in next_states])
 
         # 转换为张量
@@ -152,17 +141,17 @@ class DQNAgent:
         next_states_tensor = torch.FloatTensor(next_states_onehot)
         dones_tensor = torch.FloatTensor(dones)
         
-        # 计算当前 Q 值
+        # 计算每个动作的 Q 值
         current_q_values = self.main_network(states_tensor).gather(
-            1, actions_tensor.unsqueeze(1)
-        ).squeeze(1)
+            1, actions_tensor.unsqueeze(1)#shape=(batch_size,1)
+        ).squeeze(1)#shape=(batch_size,)
         
-        # 计算目标 Q 值（使用 target network）
-        with torch.no_grad():
+        # 计算 target network 的 Q 值
+        with torch.no_grad():#不计算梯度
             next_q_values = self.target_network(next_states_tensor).max(1)[0]
             target_q_values = rewards_tensor + self.config.gamma * next_q_values * (1 - dones_tensor)
         
-        # 计算损失并优化
+        # 计算损失并优化main network
         loss = self.criterion(current_q_values, target_q_values)
         self.optimizer.zero_grad()
         loss.backward()
@@ -179,17 +168,11 @@ class DQNAgent:
         self.epsilon = max(self.config.epsilon_min, self.epsilon * self.config.epsilon_decay)
 
 
-def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = False):
+def train_dqn(env: GridWorld, config: DQNConfig, n_episodes: int = 1000, render: bool = False):
     """训练 DQN agent"""
     agent = DQNAgent(config,env)
     rewards_history = []
     loss_history = []
-    
-    print(f"开始训练 DQN (PyTorch 版本)...")
-    print(f"总 episode 数：{n_episodes}")
-    print(f"经验回放缓冲区大小：{config.replay_buffer_size}")
-    print(f"批次大小：{config.batch_size}")
-    print(f"Target network 更新频率：{config.target_update_freq}")
     
     start_time = time.time()
     
@@ -199,7 +182,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
         total_reward = 0
         done = False
         step_count = 0
-        max_steps = 200  # 限制每个 episode 的最大步数
+        max_steps = 200  # 每个 episode 的最大步数
         
         while not done and step_count < max_steps:
             # 选择动作
@@ -234,7 +217,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
             agent.update_target_network()
         
         # 打印进度
-        if (episode + 1) % 100 == 0:
+        if (episode + 1) % 500 == 0:
             avg_reward = np.mean(rewards_history[-100:])
             elapsed_time = time.time() - start_time
             print(f"Episode {episode + 1}/{n_episodes}, "
@@ -364,7 +347,7 @@ def render_with_value_and_policy(agent, env, title: str = "Learned Value and Pol
 if __name__ == "__main__":
     env = GridWorld(rows=5, cols=5, gamma=0.9)
     config = DQNConfig()
-    agent, rewards, losses = train_dqn(env, config, n_episodes=1000)
+    agent, rewards, losses = train_dqn(env, config, n_episodes=5000)
     
     plot_results(rewards, losses)
     

@@ -1,9 +1,5 @@
-from stable_baselines3 import PPO
-from stable_baselines3.common.envs import SimpleMultiObsEnv
+import torch
 
+x = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.float32)
 
-# Stable Baselines provides SimpleMultiObsEnv as an example environment with Dict observations
-env = SimpleMultiObsEnv(random_start=False)
-
-model = PPO("MultiInputPolicy", env, verbose=1)
-model.learn(total_timesteps=100_000)
+print(torch.max(x, dim=1))

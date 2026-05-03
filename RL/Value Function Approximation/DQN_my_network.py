@@ -1,5 +1,6 @@
 """
-Deep Q-Network with Experience Replay (NumPy 实现)
+Deep Q-Network with Experience Replay
+使用 neturalwork/BP_multilayer_network_improved.py 中的 BPNetwork 实现
 """
 
 import os
@@ -19,8 +20,8 @@ import random
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from grid_world import GridWorld
 
-# 导入 NumPy 神经网络实现
-from numpy_network import NeuralNetwork
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'neturalwork'))
+from BP_multilayer_network_improved import BPNetwork
 
 
 @dataclass
@@ -43,7 +44,7 @@ class ReplayBuffer:
     """经验回放缓冲区"""
     def __init__(self, capacity: int):
         self.buffer: deque = deque(maxlen=capacity)
-        self.rng=np.random.default_rng()
+        self.rng = np.random.default_rng()
     
     def push(self, state, action, reward, next_state, done):
         """存储经验"""
@@ -51,7 +52,7 @@ class ReplayBuffer:
     
     def sample(self, batch_size: int):
         """随机采样批次"""
-        batch:List[Tuple] = random.sample(self.buffer, batch_size)
+        batch: List[Tuple] = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         return states, actions, rewards, next_states, dones
     
@@ -60,55 +61,56 @@ class ReplayBuffer:
 
 
 class DQNAgent:
-    """DQN Agent (NumPy 版本)"""
-    def __init__(self, config: DQNConfig):
+    def __init__(self, config: DQNConfig, env: GridWorld):
         self.config = config
+        self.env = env
         self.replay_buffer = ReplayBuffer(config.replay_buffer_size)
         self.epsilon = config.epsilon
         
-        # 使用 NumPy 神经网络
-        self.main_network = NeuralNetwork(config.state_dim, config.hidden_dim, config.action_dim)
-        self.target_network = NeuralNetwork(config.state_dim, config.hidden_dim, config.action_dim)
-        self.target_network.copy_weights_from(self.main_network)
+        # 使用 BPNetwork 替代 TorchDQN
+        # 网络结构: [state_dim, hidden_dim, hidden_dim, action_dim]
+        layer_sizes = [config.state_dim, config.hidden_dim, config.hidden_dim, config.action_dim]
+        
+        self.main_network = BPNetwork(
+            layer_sizes=layer_sizes,
+            eta=config.learning_rate,
+            activation='relu',
+            output_activation='linear'  # DQN 输出 Q 值，回归问题使用线性激活
+        )
+        
+        self.target_network = BPNetwork(
+            layer_sizes=layer_sizes,
+            eta=config.learning_rate,
+            activation='relu',
+            output_activation='linear'
+        )
+        # 同步 target network 参数
+        self.target_network.copy_parameters_from(self.main_network)
     
     def get_q_values(self, state, network="main"):
-        """获取 Q 值"""
+        """向前传播获取 Q 值"""
         # 将状态转换为 one-hot 向量
-        if isinstance(state, tuple):
-            state_idx = self.config.state_dim
-            # 如果 state 是元组，转换为索引
-            if hasattr(self, 'env'):
-                state_idx = self.env.state_to_index(state)
-            else:
-                # 对于 grid world，假设状态是 (row, col)
-                row, col = state
-                state_idx = int(row * 5 + col)
-            
-            state_vector = np.zeros(self.config.state_dim)
-            state_vector[state_idx] = 1.0
-        elif isinstance(state, int):
-            # 如果 state 是索引，转换为 one-hot
-            state_vector = np.zeros(self.config.state_dim)
-            state_vector[state] = 1.0
-        else:
-            # 已经是向量形式
-            state_vector = state
+        state_idx = self.env.state_to_index(state)
+        state_vector = np.zeros(self.config.state_dim)
+        state_vector[state_idx] = 1.0
         
-        state_vector = state_vector.reshape(1, -1)
+        # BPNetwork 输入格式为 (input_dim, batch_size)，单个样本为 (input_dim, 1)
+        state_input = state_vector.reshape(-1, 1)
+        
         if network == "main":
-            return self.main_network.forward(state_vector)[0]
+            q_values = self.main_network.predict(state_input)
         else:
-            return self.target_network.forward(state_vector)[0]
+            q_values = self.target_network.predict(state_input)
+        
+        return q_values.flatten()  # 返回一维数组 (action_dim,)
     
-    def select_action(self, state, env):
+    def select_action(self, state) -> int:
         """ε-greedy 策略选择动作"""
         if random.random() < self.epsilon:
-            # 探索：随机选择动作
-            return random.randint(0, env.n_actions - 1)
+            return random.randint(0, self.env.n_actions - 1)
         else:
-            # 利用：选择最优动作
             q_values = self.get_q_values(state)
-            return np.argmax(q_values)
+            return int(np.argmax(q_values))
     
     def store_experience(self, state, action, reward, next_state, done):
         """存储经验到回放缓冲区"""
@@ -120,62 +122,54 @@ class DQNAgent:
             return None
         
         # 采样批次
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(
-            self.config.batch_size
-        )
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.config.batch_size)
         
         # 将状态转换为 one-hot 向量
         def to_one_hot(state, dim):
-            if isinstance(state, tuple):
-                idx = int(state[0] * 5 + state[1])  # 针对 5x5 网格
-            else:
-                idx = int(state)
+            idx = self.env.state_to_index(state)
             vec = np.zeros(dim)
             vec[idx] = 1.0
             return vec
         
+        # 形状: (batch_size, state_dim)
         states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in states])
         next_states_onehot = np.array([to_one_hot(s, self.config.state_dim) for s in next_states])
         
-        # NumPy 实现
-        # 计算当前 Q 值
-        current_q_values = self.main_network.forward(states_onehot)
+        # BPNetwork 输入格式为 (input_dim, batch_size)，需要转置
+        states_input = states_onehot.T  # (state_dim, batch_size)
+        next_states_input = next_states_onehot.T  # (state_dim, batch_size)
         
-        # 计算目标 Q 值
-        next_q_values = self.target_network.forward(next_states_onehot)
-        max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)
+        # 计算当前网络对每个动作的 Q 值，形状: (action_dim, batch_size)
+        current_q = self.main_network.predict(states_input)
         
-        # 构建目标值
-        targets = current_q_values.copy()
-        for i in range(len(actions)):
-            target = rewards[i] + self.config.gamma * max_next_q_values[i][0] * (1 - dones[i])
-            targets[i, actions[i]] = target
+        # 计算 target network 对 next_state 的 Q 值，形状: (action_dim, batch_size)
+        next_q = self.target_network.predict(next_states_input)
+        next_q_max = np.max(next_q, axis=0)  # (batch_size,)
         
-        # 反向传播更新
-        self.main_network.backward(states_onehot, current_q_values, targets, self.config.learning_rate)
+        # 构造 target：只更新选中动作对应的 Q 值，其余保持当前值不变（梯度为 0）
+        targets = current_q.copy()  # (action_dim, batch_size)
+        for i in range(self.config.batch_size):
+            targets[actions[i], i] = rewards[i] + self.config.gamma * next_q_max[i] * (1 - dones[i])
         
-        return np.mean((targets - current_q_values) ** 2)
+        # 单步更新 main network
+        loss = self.main_network.update_batch(states_input, targets)
+        
+        return loss
     
     def update_target_network(self):
         """更新 target network"""
-        self.target_network.copy_weights_from(self.main_network)
+        self.target_network.copy_parameters_from(self.main_network)
     
     def decay_epsilon(self):
         """衰减探索率"""
         self.epsilon = max(self.config.epsilon_min, self.epsilon * self.config.epsilon_decay)
 
 
-def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = False):
+def train_dqn(env: GridWorld, config: DQNConfig, n_episodes: int = 1000, render: bool = False):
     """训练 DQN agent"""
-    agent = DQNAgent(config)
+    agent = DQNAgent(config, env)
     rewards_history = []
     loss_history = []
-    
-    print(f"开始训练 DQN (NumPy 版本)...")
-    print(f"总 episode 数：{n_episodes}")
-    print(f"经验回放缓冲区大小：{config.replay_buffer_size}")
-    print(f"批次大小：{config.batch_size}")
-    print(f"Target network 更新频率：{config.target_update_freq}")
     
     start_time = time.time()
     
@@ -185,11 +179,11 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
         total_reward = 0
         done = False
         step_count = 0
-        max_steps = 200  # 限制每个 episode 的最大步数
+        max_steps = 200  # 每个 episode 的最大步数
         
         while not done and step_count < max_steps:
             # 选择动作
-            action = agent.select_action(state, env)
+            action = agent.select_action(state)
             
             # 执行动作
             next_state, reward = env.step(state, env.actions[action])
@@ -206,7 +200,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
             step_count += 1
             
             # 从经验回放中学习
-            loss = agent.update()
+            loss = agent.update(env)
             if loss is not None:
                 loss_history.append(loss)
         
@@ -220,7 +214,7 @@ def train_dqn(env, config: DQNConfig, n_episodes: int = 1000, render: bool = Fal
             agent.update_target_network()
         
         # 打印进度
-        if (episode + 1) % 100 == 0:
+        if (episode + 1) % 500 == 0:
             avg_reward = np.mean(rewards_history[-100:])
             elapsed_time = time.time() - start_time
             print(f"Episode {episode + 1}/{n_episodes}, "
@@ -278,7 +272,7 @@ def evaluate_agent(agent, env, n_episodes: int = 100):
         while not done and step_count < max_steps:
             # 不使用探索（纯利用）
             q_values = agent.get_q_values(state)
-            action = np.argmax(q_values)
+            action = int(np.argmax(q_values))
             
             next_state, reward = env.step(state, env.actions[action])
             state = next_state
@@ -305,7 +299,7 @@ def extract_policy_from_q(agent, env):
         for c in range(env.cols):
             state = (r, c)
             q_values = agent.get_q_values(state)
-            best_action = np.argmax(q_values)
+            best_action = int(np.argmax(q_values))
             s_idx = env.state_to_index(state)
             policy[s_idx, best_action] = 1.0
     
@@ -327,15 +321,15 @@ def render_with_value_and_policy(agent, env, title: str = "Learned Value and Pol
     
     # 创建带策略的环境
     env_with_policy = GridWorld(policy=optimal_policy)
-
-    state_value=env_with_policy.get_true_value_by_policy()
+    
+    state_value = env_with_policy.get_true_value_by_policy()
     
     # 绘制两个子图：左边状态值，右边策略
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     
     # 左图：状态值
     env_with_policy.render_with_state_value(
-        state_value,  # 转换为一维向量
+        state_value,
         title=f"{title} - V*(s)", 
         ax=ax1
     )
@@ -350,11 +344,11 @@ def render_with_value_and_policy(agent, env, title: str = "Learned Value and Pol
 if __name__ == "__main__":
     env = GridWorld(rows=5, cols=5, gamma=0.9)
     config = DQNConfig()
-    agent, rewards, losses = train_dqn(env, config, n_episodes=1000)
+    agent, rewards, losses = train_dqn(env, config, n_episodes=50000)
     
     plot_results(rewards, losses)
     
     evaluate_agent(agent, env, n_episodes=100)
     
     print("\n可视化学习到的状态值和策略...")
-    render_with_value_and_policy(agent, env, title="DQN (NumPy): Learned State Values and Optimal Policy")
+    render_with_value_and_policy(agent, env, title="DQN (BPNetwork): Learned State Values and Optimal Policy")

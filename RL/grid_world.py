@@ -45,7 +45,7 @@ class GridWorld:
             }
         self.forbidden = forbidden_pos
 
-    def set_rewards(self, r_boundary:float=-1.0, r_forbidden:float=-1.0, r_target:float=1.0)-> None:
+    def set_rewards(self, r_boundary:float=-1.0, r_forbidden:float=-1.0, r_target:float=10.0)-> None:
         self.r_boundary = r_boundary
         self.r_forbidden = r_forbidden
         self.r_target = r_target

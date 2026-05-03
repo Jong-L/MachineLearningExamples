@@ -67,6 +67,14 @@ class Softmax(ActivationFunction):
         s = self.forward(x)
         return s * (1 - s)
 
+class Linear(ActivationFunction):
+    """线性激活函数（恒等映射），适用于回归问题输出层"""
+    def forward(self, x):
+        return x
+    
+    def backward(self, x):
+        return np.ones_like(x)
+
 def get_activation_function(name):
     """根据名称获取激活函数实例"""
     activations = {
@@ -74,7 +82,8 @@ def get_activation_function(name):
         'relu': ReLU(),
         'tanh': Tanh(),
         'leaky_relu': LeakyReLU(),
-        'softmax': Softmax()
+        'softmax': Softmax(),
+        'linear': Linear()
     }
     
     if name.lower() not in activations:
@@ -160,63 +169,98 @@ class BPNetwork:
 
         return A, Z
     
+    def _compute_delta(self, A, Z, Y, l, Delta, m):
+        """计算第 l 层的 delta（梯度），供 update_batch 和 train 复用"""
+        if l == self.n_layers - 2:  # 输出层
+            if self.softmax_output:
+                delta_l = (Z[-1] - Y) / m
+            else:
+                # 对于线性输出或其他激活函数
+                if isinstance(self.output_activation_func, Linear):
+                    delta_l = (Z[-1] - Y) / m
+                elif isinstance(self.output_activation_func, Sigmoid):
+                    delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
+                elif isinstance(self.output_activation_func, ReLU):
+                    delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
+                elif isinstance(self.output_activation_func, Tanh):
+                    delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
+                elif isinstance(self.output_activation_func, LeakyReLU):
+                    delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
+                else:
+                    # 通用情况
+                    delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
+        else:  # 隐藏层
+            if isinstance(self.activation_func, Sigmoid):
+                delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
+            elif isinstance(self.activation_func, ReLU):
+                delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
+            elif isinstance(self.activation_func, Tanh):
+                delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
+            elif isinstance(self.activation_func, LeakyReLU):
+                delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
+            elif isinstance(self.activation_func, Linear):
+                delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
+            else:
+                # 通用情况
+                delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
+        return delta_l
+
+    def update_batch(self, X, Y):
+        """
+        执行单步批量更新（前向传播 + 反向传播 + 参数更新）
+        适用于 DQN 等需要逐步训练的强化学习算法
+        
+        参数:
+            X: numpy array, shape=(input_dim, batch_size)
+            Y: numpy array, shape=(output_dim, batch_size)
+        返回:
+            loss: float
+        """
+        m = X.shape[1]
+        
+        # 前向传播
+        A, Z = self.forward(X)
+        
+        # 计算损失
+        loss = self.compute_loss(Z[-1], Y)
+        
+        # 反向传播
+        Delta = [None] * (self.n_layers - 1)
+        for l in range(self.n_layers - 2, -1, -1):
+            delta_l = self._compute_delta(A, Z, Y, l, Delta, m)
+            
+            # 更新权重和偏置
+            self.weights[l] -= self.eta * Z[l] @ delta_l.T
+            self.biases[l] += self.eta * np.sum(delta_l, axis=1, keepdims=True)
+            Delta[l] = delta_l
+        
+        return loss
+
     def train(self, X, Y):
         m = X.shape[1]
         for count in range(self.max_iter):
-            A, Z = self.forward(X)
-
-            if (count + 1) % 500 == 0:
-                E = self.compute_loss(Z[-1], Y)
-                print(f"Iteration {count+1}, Loss: {E}")
-                if E < self.threshold:
-                    print(f"在第 {count+1} 次迭代时收敛！")
-                    print(f"最终误差为：{E}")
-                    break
+            loss = self.update_batch(X, Y)
             
-            Delta = [None] * (self.n_layers - 1)
-            for l in range(self.n_layers - 2, -1, -1):
-                if l == self.n_layers - 2:  # 输出层
-                    # 对于Softmax + 交叉熵损失，梯度简化为 (y_pred - y_true) / m
-                    if self.softmax_output:
-                        delta_l = (Z[-1] - Y) / m
-                    else:
-                        # 对于其他激活函数，需要相应的导数计算
-                        if isinstance(self.output_activation_func, Sigmoid):
-                            delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
-                        elif isinstance(self.output_activation_func, ReLU):
-                            delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
-                        elif isinstance(self.output_activation_func, Tanh):
-                            delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
-                        elif isinstance(self.output_activation_func, LeakyReLU):
-                            delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
-                        else:
-                            # 通用情况：假设损失函数对输出的梯度是(Z[-1] - Y)，乘以激活函数导数
-                            delta_l = (Z[-1] - Y) * self.output_activation_func.backward(A[l] - self.biases[l]) / m
-                else:  # 隐藏层
-                    if isinstance(self.activation_func, Sigmoid):
-                        delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
-                    elif isinstance(self.activation_func, ReLU):
-                        delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
-                    elif isinstance(self.activation_func, Tanh):
-                        delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
-                    elif isinstance(self.activation_func, LeakyReLU):
-                        delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
-                    else:
-                        # 通用情况
-                        delta_l = (self.weights[l+1] @ Delta[l+1]) * self.activation_func.backward(A[l] - self.biases[l])
-
-                # 更新权重和偏置
-                self.weights[l] -= self.eta * Z[l] @ delta_l.T
-                self.biases[l] += self.eta * np.sum(delta_l, axis=1, keepdims=True)
-                Delta[l] = delta_l
-
+            if (count + 1) % 500 == 0:
+                print(f"Iteration {count+1}, Loss: {loss}")
+                if loss < self.threshold:
+                    print(f"在第 {count+1} 次迭代时收敛！")
+                    print(f"最终误差为：{loss}")
+                    break
+        
         if count == self.max_iter - 1:
-            E = self.compute_loss(Z[-1], Y)
-            print(f"达到最大迭代次数，最终误差为：{E}")
+            print(f"达到最大迭代次数，最终误差为：{loss}")
 
     def predict(self, x):
         A, Z = self.forward(x)
         return Z[-1]
+    
+    def copy_parameters_from(self, other):
+        """从另一个 BPNetwork 实例深拷贝参数，用于 target network 同步"""
+        if self.layer_sizes != other.layer_sizes:
+            raise ValueError(f"网络结构不匹配：{self.layer_sizes} vs {other.layer_sizes}")
+        self.weights = [w.copy() for w in other.weights]
+        self.biases = [b.copy() for b in other.biases]
     
     def compute_loss(self, Y_pred, Y):
         """计算损失函数"""
